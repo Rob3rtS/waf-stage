@@ -19,7 +19,7 @@ To use::
         more code
 """
 
-import os, re, socket, threading, sys, subprocess, atexit, traceback
+import os, re, socket, threading, sys, subprocess, atexit, traceback, signal, time
 try:
 	from queue import Queue
 except ImportError:
@@ -63,7 +63,7 @@ if 1:
 	def process_command(conn):
 		query = conn.recv(HEADER_SIZE)
 		if not query:
-			return
+			return None
 		#print(len(query))
 		assert(len(query) == HEADER_SIZE)
 		if sys.hexversion > 0x3000000:
@@ -82,6 +82,7 @@ if 1:
 			raise ValueError('Exit')
 		else:
 			raise ValueError('Invalid query %r' % query)
+		return 'ok'
 
 	def run_command(conn, query):
 
@@ -104,7 +105,7 @@ if 1:
 			else:
 				ret = subprocess.Popen(cmd, **kw).wait()
 		except KeyboardInterrupt:
-			return
+			raise
 		except Exception as e:
 			ret = -1
 			exc = str(e) + traceback.format_exc()
@@ -136,12 +137,31 @@ if 1:
 
 	def make_conn(bld):
 		child_socket, parent_socket = socket.socketpair(socket.AF_UNIX)
+		ppid = os.getpid()
 		pid = os.fork()
 		if pid == 0:
 			parent_socket.close()
+
+			# if the parent crashes, try to exit cleanly
+			def reap():
+				while 1:
+					try:
+						os.kill(ppid, 0)
+					except OSError:
+						break
+					else:
+						time.sleep(1)
+				os.kill(os.getpid(), signal.SIGKILL)
+			t = threading.Thread(target=reap)
+			t.setDaemon(True)
+			t.start()
+
 			# write to child_socket only
-			while 1:
-				process_command(child_socket)
+			try:
+				while process_command(child_socket):
+					pass
+			except KeyboardInterrupt:
+				sys.exit(2)
 		else:
 			child_socket.close()
 			return (pid, parent_socket)

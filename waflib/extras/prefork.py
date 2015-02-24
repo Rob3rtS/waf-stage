@@ -25,7 +25,7 @@ To use::
 The servers and the build process are using a shared nonce to prevent undesirable external connections.
 """
 
-import os, re, socket, threading, sys, subprocess, time, atexit, traceback, random
+import os, re, socket, threading, sys, subprocess, time, atexit, traceback, random, signal
 try:
 	import SocketServer
 except ImportError:
@@ -39,7 +39,6 @@ try:
 except ImportError:
 	import pickle as cPickle
 
-DEFAULT_PORT = 51200
 SHARED_KEY = None
 HEADER_SIZE = 64
 
@@ -65,14 +64,13 @@ def safe_compare(x, y):
 re_valid_query = re.compile('^[a-zA-Z0-9_, ]+$')
 class req(SocketServer.StreamRequestHandler):
 	def handle(self):
-		while 1:
-			try:
-				self.process_command()
-			except KeyboardInterrupt:
-				break
-			except Exception as e:
-				print(e)
-				break
+		try:
+			while self.process_command():
+				pass
+		except KeyboardInterrupt:
+			return
+		except Exception as e:
+			print(e)
 
 	def send_response(self, ret, out, err, exc):
 		if out or err or exc:
@@ -92,7 +90,7 @@ class req(SocketServer.StreamRequestHandler):
 	def process_command(self):
 		query = self.rfile.read(HEADER_SIZE)
 		if not query:
-			return
+			return None
 		#print(len(query))
 		assert(len(query) == HEADER_SIZE)
 		if sys.hexversion > 0x3000000:
@@ -103,7 +101,7 @@ class req(SocketServer.StreamRequestHandler):
 		if not safe_compare(key, SHARED_KEY):
 			print('%r %r' % (key, SHARED_KEY))
 			self.send_response(-1, '', '', 'Invalid key given!')
-			return
+			return 'meh'
 
 		query = query[:-20]
 		#print "%r" % query
@@ -119,6 +117,7 @@ class req(SocketServer.StreamRequestHandler):
 			raise ValueError('Exit')
 		else:
 			raise ValueError('Invalid query %r' % query)
+		return 'ok'
 
 	def run_command(self, query):
 
@@ -141,7 +140,7 @@ class req(SocketServer.StreamRequestHandler):
 			else:
 				ret = subprocess.Popen(cmd, **kw).wait()
 		except KeyboardInterrupt:
-			return
+			raise
 		except Exception as e:
 			ret = -1
 			exc = str(e) + traceback.format_exc()
@@ -149,27 +148,40 @@ class req(SocketServer.StreamRequestHandler):
 		self.send_response(ret, out, err, exc)
 
 def create_server(conn, cls):
-	#SocketServer.ThreadingTCPServer.allow_reuse_address = True
-	#server = SocketServer.ThreadingTCPServer(conn, req)
-
 	# child processes do not need the key, so we remove it from the OS environment
 	global SHARED_KEY
 	SHARED_KEY = os.environ['SHARED_KEY']
 	os.environ['SHARED_KEY'] = ''
 
-	SocketServer.TCPServer.allow_reuse_address = True
+	ppid = int(os.environ['PREFORKPID'])
+	def reap():
+		if os.sep != '/':
+			os.waitpid(ppid, 0)
+		else:
+			while 1:
+				try:
+					os.kill(ppid, 0)
+				except OSError:
+					break
+				else:
+					time.sleep(1)
+		os.kill(os.getpid(), signal.SIGKILL)
+	t = threading.Thread(target=reap)
+	t.setDaemon(True)
+	t.start()
+
 	server = SocketServer.TCPServer(conn, req)
+	print(server.server_address[1])
+	sys.stdout.flush()
 	#server.timeout = 6000 # seconds
 	server.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-	server.serve_forever(poll_interval=0.001)
+	try:
+		server.serve_forever(poll_interval=0.001)
+	except KeyboardInterrupt:
+		pass
 
 if __name__ == '__main__':
-	if len(sys.argv) > 1:
-		port = int(sys.argv[1])
-	else:
-		port = DEFAULT_PORT
-	#conn = (socket.gethostname(), port)
-	conn = ("127.0.0.1", port)
+	conn = ("127.0.0.1", 0)
 	#print("listening - %r %r\n" % conn)
 	create_server(conn, req)
 else:
@@ -195,17 +207,12 @@ else:
 		return pool
 	Runner.Parallel.init_task_pool = init_task_pool
 
-	PORT = 51200
-
 	def make_server(bld, idx):
-		port = PORT + idx
-		cmd = [sys.executable, os.path.abspath(__file__), str(port)]
-		proc = subprocess.Popen(cmd)
-		proc.port = port
+		cmd = [sys.executable, os.path.abspath(__file__)]
+		proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
 		return proc
 
 	def make_conn(bld, srv):
-		#port = PORT + idx
 		port = srv.port
 		conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -335,6 +342,8 @@ else:
 		except KeyError:
 			key = "".join([chr(random.SystemRandom().randint(40, 126)) for x in range(20)])
 			os.environ['SHARED_KEY'] = ctx.SHARED_KEY = key
+
+		os.environ['PREFORKPID'] = str(os.getpid())
 		return key
 
 	def init_servers(ctx, maxval):
@@ -345,6 +354,10 @@ else:
 		while len(CONNS) < maxval:
 			i = len(CONNS)
 			srv = SERVERS[i]
+
+			# postpone the connection
+			srv.port = int(srv.stdout.readline())
+
 			conn = None
 			for x in range(30):
 				try:
@@ -354,6 +367,9 @@ else:
 					time.sleep(0.01)
 			if not conn:
 				raise ValueError('Could not start the server!')
+			if srv.poll() is not None:
+				Logs.warn('Looks like it it not our server process - concurrent builds are unsupported at this stage')
+				raise ValueError('Could not start the server')
 			CONNS.append(conn)
 
 	def init_smp(self):
