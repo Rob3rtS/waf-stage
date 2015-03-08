@@ -10,7 +10,7 @@ To add a tool that does not exist in the folder compat15, pass an absolute path:
 """
 
 
-VERSION="1.8.6"
+VERSION="1.8.7"
 APPNAME='waf'
 REVISION=''
 
@@ -18,7 +18,7 @@ top = '.'
 out = 'build'
 
 demos = ['cpp', 'qt4', 'tex', 'ocaml', 'kde3', 'adv', 'cc', 'idl', 'docbook', 'xmlwaf', 'gnome']
-zip_types = ['bz2', 'gz']
+zip_types = ['bz2', 'gz', 'xz']
 
 PRELUDE = ''
 
@@ -73,7 +73,7 @@ def init(ctx):
 			rev = ctx.cmd_and_log("git rev-parse HEAD").strip()
 			pats.append(('^WAFREVISION(.*)', 'WAFREVISION="%s"' % rev))
 		except Exception:
-			pass
+			rev = ''
 
 		sub_file('waflib/Context.py', pats)
 
@@ -188,7 +188,7 @@ def process_tokens(tokens):
 
 deco_re = re.compile('(def|class)\\s+(\w+)\\(.*')
 def process_decorators(body):
-	lst = body.split('\n')
+	lst = body.splitlines()
 	accu = []
 	all_deco = []
 	buf = [] # put the decorator lines
@@ -326,9 +326,9 @@ def create_waf(self, *k, **kw):
 	# when possible, set the git revision in the waf file
 	bld = self.generator.bld
 	try:
-		rev = bld.cmd_and_log("git rev-parse HEAD").strip()
+		rev = bld.cmd_and_log("git rev-parse HEAD", quiet=0).strip()
 	except Exception:
-		pass
+		rev = ''
 	else:
 		reg = re.compile('^GIT(.*)', re.M)
 		code1 = reg.sub('GIT="%s"' % rev, code1)
@@ -342,6 +342,8 @@ def create_waf(self, *k, **kw):
 	code1 = reg.sub(zipType, code1)
 	if zipType == 'gz':
 		code1 = code1.replace('bunzip2', 'gzip -d')
+	elif zipType == 'xz':
+		code1 = code1.replace('bunzip2', 'xz -d')
 
 	f = open('%s.tar.%s' % (mw, zipType), 'rb')
 	try:

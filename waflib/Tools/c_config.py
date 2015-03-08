@@ -70,7 +70,7 @@ MACRO_TO_DESTOS = {
 '__sgi'                                          : 'irix',
 '_AIX'                                           : 'aix',
 '__CYGWIN__'                                     : 'cygwin',
-'__MSYS__'                                       : 'msys',
+'__MSYS__'                                       : 'cygwin',
 '_UWIN'                                          : 'uwin',
 '_WIN64'                                         : 'win32',
 '_WIN32'                                         : 'win32',
@@ -321,7 +321,7 @@ def exec_cfg(self, kw):
 	for key, val in defi.items():
 		lst.append('--define-variable=%s=%s' % (key, val))
 
-	static = False
+	static = kw.get('force_static', False)
 	if 'args' in kw:
 		args = Utils.to_list(kw['args'])
 		if '--static' in args or '--static-libs' in args:
@@ -1093,7 +1093,7 @@ def get_suncc_version(conf, cc):
 		err = e.stderr
 
 	version = (out or err)
-	version = version.split('\n')[0]
+	version = version.splitlines()[0]
 
 	version_re = re.compile(r'cc:\s+sun\s+(c\+\+|c)\s+(?P<major>\d*)\.(?P<minor>\d*)', re.I).search
 	match = version_re(version)
