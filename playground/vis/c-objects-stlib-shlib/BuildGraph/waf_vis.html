@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+  <title>waf - Build Dependency Visualization</title>
+
+  <script type="text/javascript" src="../../resources/Vis/dist/vis.js"></script>
+  <script type="text/javascript" src="../build/visData.js"></script>
+  <link href="./dist/vis.css" rel="stylesheet" type="text/css" />
+
+  <style type="text/css">
+    #dependencies {
+      width: 1000px;
+      height: 1000px;
+      border: 1px solid lightgray;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="dependencies"></div>
+
+<script type="text/javascript">
+  // create a network
+  var container = document.getElementById('dependencies');
+
+  var options = {
+    edges: {
+      style: 'arrow'
+    }
+  };
+  var network = new vis.Network(container, data, options);
+</script>
+
+</body>
+</html>
