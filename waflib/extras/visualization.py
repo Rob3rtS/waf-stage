@@ -3,7 +3,7 @@
 # Robert Schuster, 2015
 
 """
-Visualization of build dependencie on file level.
+Visualization of build dependencies on file level.
 Generate JavaScript code for use with:
 vis.js: http://visjs.org/index.html
 JavaScript InfoVis Toolkit: http://philogb.github.io/jit/
@@ -14,9 +14,17 @@ Only files related to targets, which have been built or re-built, will be taken 
 import binascii
 import re
 import os
+import json
 import random
 import colorsys
 from waflib import Task, Node, Utils, Context
+
+from waflib.Configure import conf
+
+@conf
+def vis_init(ctx):
+	ctx.vis_registry=VisRegistry(ctx)
+	print('Initialized vr: %r'%ctx.vis_registry)
 
 class VisRegistry:
 	def __init__(self, bld):
@@ -70,35 +78,28 @@ class VisRegistry:
 		self.project=prod
 	def serialize(self):
 		self.create_project()
-		arr=[]
-		if type(self.framework['color']).__name__ != 'str':
-			i=0
-			for c in gethtmlcolors(self.file_exts.__len__()):
-				self.framework['color'][self.file_exts[i]]=c
-				i+=1
-		if self.framework['name'] == 'jit':
-			out="var depTreeData=[\n"
-			for i in self.artifacts.values():
-				arr.append(i.vis_serialize(self.framework))
-			out+=','.join(arr)
-			out+='];\n'
-			out+='var depRootId="%s";\n'%self.project.vis_id()
-			out+='var depRootName="%s";\n'%self.project.name
-		if self.framework['name'] == 'vis':
-			out=\
-"""var nodes=[];
-var edges=[];
-"""
-			for i in self.artifacts.values():
-				arr.append(i.vis_serialize(self.framework))
-			out+=''.join(arr)
-			out+=\
-"""var data = {
-    nodes: nodes,
-    edges: edges
+		self.vis_nodes=[]
+		self.vis_edges=[]
+		for i in self.artifacts.values():
+			nd={}
+			nd['id']=i.vis_id()
+			nd['label']=i.name
+			self.vis_nodes.append(nd)
+			for j in i.vis_children:
+				ed={}
+				ed['to']=i.vis_id()
+				ed['from']=j.vis_id()
+				self.vis_edges.append(ed)
+		result='''
+var nodes=%s;
+var edges=%s;
+var data = {
+	nodes: nodes,
+	edges: edges
 };
-"""
-		return(out)
+'''%(json.dumps(self.vis_nodes), json.dumps(self.vis_edges))
+		return result
+
 	def get_shape_map(self):
 		types='program stlib shlib root'.split()
 		vis_shape_map={}
@@ -119,6 +120,10 @@ var edges=[];
 	def visualize_nodes(self):
 		output='Data.js'
 		def tmp(bld):
+			#~ tgens=bld.get_all_task_gen()
+			#~ for tg in tgens:
+				#~ for tsk in tg.tasks:
+					#~ print('%r\n\n'%tsk)
 			Utils.writef(bld.bldnode.abspath()+os.sep+self.framework['name']+output, bld.vis_registry.serialize())
 		return tmp
 
@@ -127,6 +132,7 @@ var edges=[];
 Task.Task.old_post_run=Task.Task.post_run
 def new_post_run(self):
 	self.old_post_run()
+	#print(self.generator)
 	# explicit deps
 	expl_deps=self.inputs + self.dep_nodes
 	# omitting manual deps for now
@@ -153,6 +159,7 @@ def new_post_run(self):
 			dep.vis_parents=set()
 		dep.vis_parents.update(set(self.outputs))
 		vr.add_artifact(dep)
+		print(self.generator.get_name())
 	for out in self.outputs:
 		if not hasattr(out, 'vis_children'):
 			out.vis_children=set()

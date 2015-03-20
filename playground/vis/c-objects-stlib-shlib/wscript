@@ -4,13 +4,11 @@
 # Robert Schuster, 2015: added visualization
 
 """
-Demonstration for visualization of build dependencie on file level.
+Demonstration for visualization of build dependencies on file level.
 """
 
 APPNAME = 'TheProject'
 VERSION = '1.0'
-
-from waflib.extras import visualization
 
 def options(opt):
 	opt.load('compiler_c gnu_dirs')
@@ -25,9 +23,9 @@ def configure(ctx):
 
 	# visualization JavaScript framework: jit or vis
 	# jit: open BuildGraph/Jit201/waf_jit.html after build has completed
-	ctx.env.vis_framework='jit'
+	#ctx.env.vis_framework='jit'
 	# vis: open BuildGraph/Vis/waf_vis.html after build has completed
-	#ctx.env.vis_framework='vis'
+	ctx.env.vis_framework='vis'
 
 	# use uniform shapes or different shapes for different types of ccroot-targets
 	#ctx.env.vis_shape_flavor='uniform'
@@ -38,7 +36,8 @@ def configure(ctx):
 	#ctx.env.vis_default_color='#AA99BB'
 
 def build(bld):
-	bld.vis_registry=visualization.VisRegistry(bld)
+	# initialize the visualization registry
+	bld.vis_init()
 	bld(
 	 features='c',
 	 source='test_shlib.c',
@@ -79,4 +78,5 @@ def build(bld):
 	 use='something-static',
 	)
 
+	# generate the visualization data
 	bld.add_post_fun(bld.vis_registry.visualize_nodes())
