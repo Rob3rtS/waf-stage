@@ -38,8 +38,6 @@ def configure(conf):
 		node.write(txt)
 
 	conf.load('visualization')
-	conf.env.vis_framework='vis'
-	conf.env.vis_shape_flavor='uniform'
 
 from waflib import Utils, Build
 class buildall_ctx(Build.BuildContext):

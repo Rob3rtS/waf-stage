@@ -25,11 +25,11 @@ def configure(ctx):
 	# jit: open BuildGraph/Jit201/waf_jit.html after build has completed
 	#ctx.env.vis_framework='jit'
 	# vis: open BuildGraph/Vis/waf_vis.html after build has completed
-	ctx.env.vis_framework='vis'
+	#ctx.env.vis_framework='vis'
 
 	# use uniform shapes or different shapes for different types of ccroot-targets
 	#ctx.env.vis_shape_flavor='uniform'
-	ctx.env.vis_shape_flavor='mixed'
+	#ctx.env.vis_shape_flavor='mixed'
 
 	# default: use generated colors for file extensions
 	# OR use a specific color for all file types:
