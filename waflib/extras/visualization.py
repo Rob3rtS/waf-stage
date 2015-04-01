@@ -51,9 +51,10 @@ class VisRegistry:
 				roots.add(i)
 		return roots
 	def create_project(self):
-		product=getattr(Context.g_module, 'APPNAME', 'noname')
-		prod=self.bld.path.find_or_declare(product)
-		prod.vis_tgen='root'
+		project=getattr(Context.g_module, 'APPNAME', 'noname')
+		self.project=project
+		prod=self.bld.path.find_or_declare(project)
+		prod.vis_tgen='rootTG'
 		if not hasattr(prod, 'vis_children'):
 			prod.vis_children=set()
 		for i in self.get_rootelems():
@@ -87,6 +88,11 @@ class VisRegistry:
 	def serialize_tgens(self):
 		# convert the objects to a data structure ready for being dumped as json
 		jr={}
+		jr['rootTG']={}
+		jr['rootTG']['name']=self.project.name
+		jr['rootTG']['visible']='true'
+		jr['rootTG']['colorkey']='rootTG'
+		self.color_keys.append('rootTG')
 		for a in self.tgens:
 			# a (the key) is also the id - create a dict of dicts
 			art=self.tgens[a]

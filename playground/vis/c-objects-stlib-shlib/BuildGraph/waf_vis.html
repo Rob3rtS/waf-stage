@@ -11,7 +11,6 @@
     * mongoDB and python-httpd/pymongo or node.js could be used, if handling the json-"query" in the browser proves to be a bottleneck or data gets too big
   -->
   <script type="text/javascript" src="../../resources/Vis/dist/vis.js"></script>
-  <script type="text/javascript" src="../build/visData.js"></script>
   <link href="./dist/vis.css" rel="stylesheet" type="text/css" />
 
   <style type="text/css">
@@ -26,18 +25,6 @@
 <body>
 
 <div id="dependencies"></div>
-
-<script type="text/javascript">
-  // create a network
-  var container = document.getElementById('dependencies');
-
-  var options = {
-    edges: {
-      style: 'arrow'
-    }
-  };
-  var network = new vis.Network(container, data, options);
-</script>
-
+  <script type="text/javascript" src="../../resources/waf_vis.js"></script>
 </body>
 </html>
