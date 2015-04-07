@@ -54,12 +54,16 @@ class VisRegistry:
 		project=getattr(Context.g_module, 'APPNAME', 'noname')
 		self.project=project
 		prod=self.bld.path.find_or_declare(project)
-		prod.vis_tgen='rootTG'
+		prod.vis_out_of_tgen='rootTG'
 		if not hasattr(prod, 'vis_children'):
 			prod.vis_children=set()
 		for i in self.get_rootelems():
+			print('create project - add root elem: %s'%i)
 			prod.vis_children.add(i)
 			i.vis_parents.add(prod)
+			if not hasattr(i, 'vis_in_for_tgen'):
+				i.vis_in_for_tgen=set()
+			i.vis_in_for_tgen.add('rootTG')
 		self.add_artifact(prod)
 		self.project=prod
 	def serialize_nodes(self):
@@ -71,19 +75,24 @@ class VisRegistry:
 			art=self.artifacts[a]
 			jr[a]={}
 			jr[a]['name']=art.name
-			if art.vis_tgen == 'root':
-				jr[a]['visible']='false'
-			else:
-				jr[a]['visible']='true'
+			#if art.vis_out_of_tgen == 'rootTG':
+			jr[a]['visible']='false'
+			#else:
+			#	jr[a]['visible']='true'
 			# might be redundant, but it should unify handling (see self.serialize_tgens())
 			jr[a]['colorkey']=art.suffix()
 			jr[a]['parents']=[x.vis_id() for x in art.vis_parents]
 			jr[a]['children']=[x.vis_id() for x in art.vis_children]
 			try:
-				jr[a]['tgen']=art.vis_tgen
+				jr[a]['out_of_tgen']=list(art.vis_out_of_tgen)
+			except:
+				# probably happening for the leaf elements
+				print('no out_of_tgen for %s'%art.name)
+			try:
+				jr[a]['in_for_tgen']=list(art.vis_in_for_tgen)
 			except:
 				# probably happening for the root element
-				print('no tgen for %s'%art.name)
+				print('no in_for_tgen for %s'%art.name)
 		return json.dumps(jr)
 	def serialize_tgens(self):
 		# convert the objects to a data structure ready for being dumped as json
@@ -123,7 +132,7 @@ Task.Task.old_post_run=Task.Task.post_run
 def new_post_run(self):
 	self.old_post_run()
 	tg=self.generator
-
+	#print(tg.__dict__)
 	# explicit deps
 	expl_deps=self.inputs + self.dep_nodes
 	# omitting manual deps for now
@@ -150,13 +159,18 @@ def new_post_run(self):
 		if not hasattr(dep, 'vis_parents'):
 			dep.vis_parents=set()
 		dep.vis_parents.update(set(self.outputs))
-		dep.vis_tgen=tg.vis_id()
+		if not hasattr(dep, 'vis_in_for_tgen'):
+			dep.vis_in_for_tgen=set()
+		# a task gen can have several inputs
+		dep.vis_in_for_tgen.add(tg.vis_id())
 		vr.add_artifact(dep)
 	for out in self.outputs:
 		if not hasattr(out, 'vis_children'):
 			out.vis_children=set()
 		out.vis_children.update(expl_deps + impl_deps)
-		out.vis_tgen=tg.vis_id()
+		# a node can be the output of only a single task gen
+		# but a task gen can have several outputs
+		out.vis_out_of_tgen=tg.vis_id()
 		vr.add_artifact(out)
 
 Task.Task.post_run=new_post_run

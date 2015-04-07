@@ -24,26 +24,81 @@ loadJSON("./wafColors.json",storeColors);
 //console.log(wafTaskGens);
 //console.log(wafNodes);
 
-for (var tgId in wafTaskGens) {
-    nodes.push({id: tgId, label: wafTaskGens[tgId]['name'], shape: "box", color: wafColors[wafTaskGens[tgId]['colorkey']]});
-    if (getNodeByTGen(tgId) in wafNodes) {
-    parents=wafNodes[getNodeByTGen(tgId)]['parents'];
-    console.log(wafTaskGens[tgId]['name']);
-    console.log(parents);
-    parents.map(function(p) {
-        parentId=wafNodes[p]['tgen'];
-        combi=parentId+'_'+tgId;
-        console.log(wafNodes[p]);
-        console.log(p+' '+combi);
-        // make sure to add the edge between 2 task gens only once
-        if (parentId !== tgId) {
-        //if (! combi in tgenEdgeSeen && parentId !== tgId) {
-            tgenEdgeSeen[combi]=true;
-            edges.push({from: tgId, to: parentId});
+for (var ndId in wafNodes) {
+    if (wafNodes[ndId]['visible'] == 'false') {
+        // this node is output of the following task gens:
+        //var outOfTGen=getTGenOutOf(ndId);
+        // this node is input for the following task gens:
+        var inForTGens=wafNodes[ndId]['in_for_tgen'];
+        // connect all task gens with edges, where this node is input for one and output of another
+        var outTgId=wafNodes[ndId]['out_of_tgen'];
+        if (inForTGens) {
+            inForTGens.map(function(n) {
+                // show the task gen
+                //wafTaskGens[n]['visible']='true'; // should be visible anyway by default
+                if (n == undefined || outTgId == undefined) {
+                    return;
+                }
+                combi=outTgId+'_'+n;
+                console.log(wafNodes[ndId]['name']+': '+combi);
+                if (n == outTgId) {
+                    console.log('skipping edge: '+outTgId+' === '+n);
+                    return;
+                }
+                // make sure to add the edge between 2 task gens only once
+                if (! (combi in tgenEdgeSeen) && n !== outTgId) {
+                    tgenEdgeSeen[combi]=1;
+                    edges.push({from: outTgId, to: n});
+                }
+            })
         }
-    })
+    }
+
+}
+
+// add nodes for all visible elements
+for (var ndId in wafNodes) {
+    if (wafNodes[ndId]['visible'] == 'true') {
+        console.log(wafNodes[ndId]['name']+': '+wafNodes[ndId]['visible']);
+        nodes.push({id: ndId, label: wafNodes[ndId]['name'], shape: "box", color: wafColors[wafNodes[ndId]['colorkey']]});
     }
 }
+for (var tgId in wafTaskGens) {
+    if (wafTaskGens[tgId]['visible'] == 'true') {
+        console.log(wafTaskGens[tgId]['name']+': '+wafTaskGens[tgId]['visible']);
+        nodes.push({id: tgId, label: wafTaskGens[tgId]['name'], shape: "box", color: wafColors[wafTaskGens[tgId]['colorkey']]});
+    }
+}
+
+//~ for (var tgId in wafTaskGens) {
+    //~ if (wafTaskGens[tgId]['visible'] == 'true') {
+        //~ console.log(wafTaskGens[tgId]['name']+': '+wafTaskGens[tgId]['visible']);
+        //~ nodes.push({id: tgId, label: wafTaskGens[tgId]['name'], shape: "box", color: wafColors[wafTaskGens[tgId]['colorkey']]});
+        //~ var tgnodes=getNodesForTGen(tgId);
+        //~ tgnodes.map(function(n) {
+            //~ if (n in wafNodes) {
+                //~ var parents=wafNodes[n]['parents'];
+                //~ console.log('nd: '+wafNodes[n]['name']+' tg: '+wafTaskGens[tgId]['name']);
+                //~ console.log(parents.map(function(i){return wafNodes[i]['name'];}));
+                //~ parents.map(function(p) {
+                    //~ parentId=wafNodes[p]['tgen'];
+                    //~ if (wafTaskGens[parentId]['visible'] === 'false') {
+                        //~ // task gen is exploded, link this task gen to its parent task gen's nodes
+                        
+                    //~ }
+                    //~ combi=parentId+'_'+tgId;
+                    //~ console.log(wafNodes[p]);
+                    //~ console.log(wafNodes[p]['name']+': '+combi);
+                    //~ // make sure to add the edge between 2 task gens only once
+                    //~ if (! (combi in tgenEdgeSeen) && parentId !== tgId) {
+                        //~ tgenEdgeSeen[combi]=1;
+                        //~ edges.push({from: tgId, to: parentId});
+                    //~ }
+                //~ })
+            //~ }
+        //~ })
+    //~ }
+//~ }
 
 var data = {
     nodes: nodes,
@@ -52,13 +107,24 @@ var data = {
 var container = document.getElementById('dependencies');
 var network = new vis.Network(container, data, options);
 
-function getNodeByTGen(id) {
+function getTGensInFor(id) {
+    var result=[];
     for (var ndId in wafNodes) {
-        if (id === wafNodes[ndId]['tgen']) {
-            return ndId;
+        if (id === wafNodes[ndId]['in_for_tgen']) {
+            result.push(ndId);
         }
     }
+    return result;
 }
+//~ function getNodesForTGen(id) {
+    //~ var result=[];
+    //~ for (var ndId in wafNodes) {
+        //~ if (id === wafNodes[ndId]['in_for_tgen']) {
+            //~ result.push(ndId);
+        //~ }
+    //~ }
+    //~ return result;
+//~ }
 
 function storeNodes(wafNodesJSON) {
     wafNodes=wafNodesJSON
