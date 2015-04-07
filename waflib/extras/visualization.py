@@ -84,7 +84,7 @@ class VisRegistry:
 			jr[a]['parents']=[x.vis_id() for x in art.vis_parents]
 			jr[a]['children']=[x.vis_id() for x in art.vis_children]
 			try:
-				jr[a]['out_of_tgen']=list(art.vis_out_of_tgen)
+				jr[a]['out_of_tgen']=art.vis_out_of_tgen
 			except:
 				# probably happening for the leaf elements
 				print('no out_of_tgen for %s'%art.name)

@@ -42,18 +42,44 @@ for (var ndId in wafNodes) {
                 combi=outTgId+'_'+n;
                 console.log(wafNodes[ndId]['name']+': '+combi);
                 if (n == outTgId) {
-                    console.log('skipping edge: '+outTgId+' === '+n);
+                    console.log('skipping edge: '+outTgId+' == '+n);
                     return;
                 }
                 // make sure to add the edge between 2 task gens only once
-                if (! (combi in tgenEdgeSeen) && n !== outTgId) {
+                if (! (combi in tgenEdgeSeen) && n != outTgId) {
                     tgenEdgeSeen[combi]=1;
                     edges.push({from: outTgId, to: n});
                 }
             })
         }
     }
-
+    else {
+        // this node shall be visible - can it be connected directly to its parent node or to the task gen, for which the parent is an output?
+        var parents=wafNodes[ndId]['parents'];
+        parents.map(function(p) {
+                if (wafNodes[p]['visible'] == 'true') {
+                    edges.push({from: ndId, to: p});
+                }
+                else {
+                    var outTgId=wafNodes[p]['out_of_tgen'];
+                    if (outTgId == undefined) {
+                        return;
+                    }
+                    combi=ndId+'_'+outTgId;
+                    console.log(wafNodes[ndId]['name']+': '+combi);
+                    if (ndId == outTgId) {
+                        console.log('skipping edge: '+ndId+' == '+outTgId);
+                        return;
+                    }
+                    // make sure to add the edge between 2 task gens only once
+                    if (! (combi in tgenEdgeSeen) && ndId != outTgId) {
+                        tgenEdgeSeen[combi]=1;
+                        edges.push({from: ndId, to: outTgId});
+                    }
+                }
+            }
+        )
+    }
 }
 
 // add nodes for all visible elements
