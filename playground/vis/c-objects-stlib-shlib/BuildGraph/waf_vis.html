@@ -4,7 +4,7 @@
   <title>waf - Build Dependency Visualization</title>
   <!--
     get inspiration from 21_data_manipulation and 30_importing_from_gephi (load json)
-    * load waf*.jsons
+    * load waf*.json files
     * transform data to nodes and edges - initial layout: only task generators
     * enable interaction with the task gen vis-nodes: explode any node to its children nodes (either only direct children or recursively also grand-children)
     * transformation uses a query, where the visibility-flag and the relation between nodes and task gens AND nodes and nodes are taken into account
@@ -12,6 +12,7 @@
   -->
   <script type="text/javascript" src="../../resources/Vis/dist/vis.js"></script>
   <link href="./dist/vis.css" rel="stylesheet" type="text/css" />
+  <link href="../../resources/waf_vis.css" rel="stylesheet" type="text/css" />
 
   <style type="text/css">
     #dependencies {
@@ -25,10 +26,7 @@
 <body>
 
 <div id="dependencies"></div>
-<div><span id="explode_single">explode single</span><br>
-<div><span id="explode_recurse">explode recursively</span><br>
-<div><span id="explode_all">explode all</span><br>
-Selection: <span id="selection"></span></div>
-  <script type="text/javascript" src="../../resources/waf_vis.js"></script>
+<div><a href="#" id="explode_all" class="wafVisButton">explode all</a></div>
+<script type="text/javascript" src="../../resources/waf_vis.js"></script>
 </body>
 </html>

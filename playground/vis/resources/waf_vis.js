@@ -1,3 +1,4 @@
+// 
 
 // create a network
 var container = document.getElementById('dependencies');
@@ -10,10 +11,11 @@ var options = {
     }
 };
 
-
 var wafNodes;
 var wafTaskGens;
 var wafColors;
+var keyRecursive=false;
+var limit=20;
 
 loadJSON("./wafNodes.json",storeNodes);
 loadJSON("./wafTaskGens.json",storeTaskGens);
@@ -26,19 +28,14 @@ var data = {
     edges: edges
 };
 var network = new vis.Network(container, data, options);
-// need to find a way to handle edge ids in a consistent way
-//var edgeIdx=0;
-//console.log(wafTaskGens);
-//console.log(wafNodes);
-//var tgenEdgeSeen={};
 
 function calcVis() {
-    //~ var nodes=[];
-    //~ var edges=[];
+    if (countItems() > limit) {
+        var proceed=confirm('Limit of visible items reached: proceed');
+        // tbd: if no: resetVisibility();
+    }
     for (var ndId in wafNodes) {
         if (wafNodes[ndId]['visible'] == 'false') {
-            // this node is output of the following task gens:
-            //var outOfTGen=getTGenOutOf(ndId);
             // this node is input for the following task gens:
             var inForTGens=wafNodes[ndId]['in_for_tgen'];
             // connect all task gens with edges, where this node is input for one and output of another
@@ -47,34 +44,21 @@ function calcVis() {
                 //console.log('node: '+wafNodes[ndId]['name']+' -> inForTGens: '+inForTGens.map(function(x){return wafTaskGens[x]['name'];}).toString());
                 inForTGens.map(function(n) {
                     // show the task gen
-                    //wafTaskGens[n]['visible']='true'; // should be visible anyway by default
                     if (n == undefined || outTgId == undefined) {
                         return;
                     }
                     if (wafTaskGens[n]['visible'] == 'true') {
-                        //console.log(wafTaskGens[n]['name']+' is visible');
                         var combi=outTgId+'_'+n;
-                        //console.log(wafNodes[ndId]['name']+': '+combi);
-                        if (n == outTgId) {
-                            return;
-                        }
-                        // make sure to add the edge between 2 task gens only once
                         if (n != outTgId) {
-                            // it is also possible, that n is not visible anymore, if it is has been exploded
+                            // edges.update() makes sure to add the edge between 2 task gens only once
                             edges.update({id: combi, from: outTgId, to: n});
                         }
                     }
                     else {
-                        //console.log(wafTaskGens[n]['name']+' is invisible');
                         // create edges between from this task gen to the nodes of the exploded task gen
                         var relatedNodes=getNodesInForAnyOutOfTGen(n);
                         relatedNodes.map(function(m){
                             var combi=outTgId+'_'+m;
-                            //console.log(wafNodes[ndId]['name']+': '+combi);
-                            if (m == outTgId) {
-                                return;
-                            }
-                            // make sure to add the edge between 2 task gens only once
                             if (m != outTgId) {
                                 edges.update({id: combi, from: outTgId, to: m});
                             }
@@ -141,32 +125,28 @@ function calcVis() {
             });
         }
     }
-
-
-    //network.setData(data);
-    // network._updateNodes(ids, nodes)
-    // network.start();
 }
 
-
-network.on('select', function(params) {
-    document.getElementById('selection').innerHTML = params.nodes;
-});
 network.on('doubleClick', function(params) {
-    document.getElementById('selection').innerHTML = params.nodes;
-    explode_single(params.nodes);
+    explode(params.nodes[0]);
 });
 
-function explode_single(){
-    var id=document.getElementById('selection').innerHTML;
-    console.log('id to explode: '+id);
+function explode(id){
     if (id == 'rootTG') {
         return;
     }
     if (id in wafTaskGens) {
         wafTaskGens[id]['visible']='false';
         //var relatedNodes=getRelatedNodesForTGen(id);
-        var relatedNodes=getNodesOutOfTGen(id);
+        var relatedNodes=[];
+        // recursion is disabled - it leaves some task gens separated from the network
+        if (keyRecursive == true && false) {
+            console.log('ctrl -> recursive');
+            relatedNodes=getRelatedNodesForTGen(id);
+        }
+        else {
+            relatedNodes=getNodesOutOfTGen(id);
+        }
         relatedNodes.map(function(n){
             wafNodes[n]['visible']='true';
         });
@@ -186,12 +166,47 @@ function explode_single(){
     }
 }
 
-function hh() {
+function explodeAll() {
+    for (var ndId in wafNodes) {
+        wafNodes[ndId]['visible']='true';
+    }
+    for (var tgId in wafTaskGens) {
+        wafTaskGens[tgId]['visible']='false'
+    }
     calcVis();
-    var ex=document.getElementById('explode_single');
-    ex.onclick=explode_single;
 }
-window.onload=hh;
+
+function countItems() {
+    var count=0;
+    for (var ndId in wafNodes) {
+        if (wafNodes[ndId]['visible'] == 'true') {
+            count++;
+        }
+    }
+    for (var tgId in wafTaskGens) {
+        if (wafTaskGens[tgId]['visible'] == 'true') {
+            count++;
+        }
+    }
+    return count;
+}
+
+function init() {
+    calcVis();
+    // when Ctrl-key is pressed during doubleclick: explode the task gen "recursively"
+    window.onkeydown = function(e){
+        if (e.keyCode == 17) {
+            keyRecursive=true;
+        }
+    };
+    window.onkeyup = function(e){
+        if (e.keyCode == 17) {
+            keyRecursive=false;
+        }
+    };
+    document.getElementById('explode_all').onclick=explodeAll;
+}
+window.onload=init;
 
 function getTGensInFor(id) {
     var result=[];
@@ -211,6 +226,7 @@ function getRelatedNodesForTGen(n) {
             relatedNodes.push(o);
         }
         if (Array.isArray(wafNodes[o]['in_for_tgen']) && wafNodes[o]['in_for_tgen'].indexOf(n) > -1) {
+            console.log('getRelatedNodesForTGen adding: '+wafNodes[o]['name']+'to '+wafTaskGens[n])
             relatedNodes.push(o);
         }
     }
@@ -247,16 +263,18 @@ function getNodesInForAnyOutOfTGen(n) {
             }
         }
     }
-    console.log('getNodesInForAnyOutOfTGen('+n+'): '+relatedNodes)
+    //console.log('getNodesInForAnyOutOfTGen('+n+'): '+relatedNodes)
     return relatedNodes;
 }
 
 function storeNodes(wafNodesJSON) {
     wafNodes=wafNodesJSON
 }
+
 function storeTaskGens(wafTaskGensJSON) {
     wafTaskGens=wafTaskGensJSON
 }
+
 function storeColors(wafColorsJSON) {
     wafColors=wafColorsJSON
 }
