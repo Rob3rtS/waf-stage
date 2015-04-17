@@ -1,4 +1,4 @@
-// 
+// waf - Build Dependency Visualization using vis.js
 
 // create a network
 var container = document.getElementById('dependencies');
@@ -15,8 +15,9 @@ var wafNodes;
 var wafTaskGens;
 var wafColors;
 var keyRecursive=false;
-var limit=20;
+var limit=100;
 
+// trying to load .json files from any directory other than the current or a subdirectory fails due to a browser security policy
 loadJSON("./wafNodes.json",storeNodes);
 loadJSON("./wafTaskGens.json",storeTaskGens);
 loadJSON("./wafColors.json",storeColors);
@@ -30,10 +31,6 @@ var data = {
 var network = new vis.Network(container, data, options);
 
 function calcVis() {
-    if (countItems() > limit) {
-        var proceed=confirm('Limit of visible items reached: proceed');
-        // tbd: if no: resetVisibility();
-    }
     for (var ndId in wafNodes) {
         if (wafNodes[ndId]['visible'] == 'false') {
             // this node is input for the following task gens:
@@ -137,41 +134,50 @@ function explode(id){
     }
     if (id in wafTaskGens) {
         wafTaskGens[id]['visible']='false';
-        //var relatedNodes=getRelatedNodesForTGen(id);
         var relatedNodes=[];
-        // recursion is disabled - it leaves some task gens separated from the network
-        if (keyRecursive == true && false) {
-            console.log('ctrl -> recursive');
+        if (keyRecursive == true) {
             relatedNodes=getRelatedNodesForTGen(id);
+            // find all task gens, which are putting out any nodes, which are input for this task gen
+            var relatedTGens=getChildTGens(id);
+            relatedTGens.map(function(t){
+                if (wafTaskGens[t]['visible'] == 'true') {
+                    explode(t);
+                }
+            });
         }
         else {
             relatedNodes=getNodesOutOfTGen(id);
         }
         relatedNodes.map(function(n){
-            wafNodes[n]['visible']='true';
+            showNode(n);
         });
         // the entire network is reorganized completely new, all elements are shifted
         // use add/remove for nodes and edges to have a smooth change
         calcVis();
     }
     else if (id in wafNodes) {
-        //var relatedNodes=getRelatedNodesForTGen(id);
         var relatedNodes=wafNodes[id]['children'];
         relatedNodes.map(function(n){
-            wafNodes[n]['visible']='true';
+            showNode(n);
         });
-        // the entire network is reorganized completely new, all elements are shifted
-        // use add/remove for nodes and edges to have a smooth change
         calcVis();
     }
 }
 
+function showNode(n) {
+    wafNodes[n]['visible']='true';
+}
+
 function explodeAll() {
-    for (var ndId in wafNodes) {
-        wafNodes[ndId]['visible']='true';
+    if (Object.keys(wafNodes).length > limit) {
+        var proceed=confirm('Number of visible node will exceed limit: '+limit+' .\nProceed anyway?');
+        if (! proceed) { return; }
     }
-    for (var tgId in wafTaskGens) {
-        wafTaskGens[tgId]['visible']='false'
+    for (var n in wafNodes) {
+        showNode(n);
+    }
+    for (var t in wafTaskGens) {
+        wafTaskGens[t]['visible']='false'
     }
     calcVis();
 }
@@ -226,24 +232,35 @@ function getRelatedNodesForTGen(n) {
             relatedNodes.push(o);
         }
         if (Array.isArray(wafNodes[o]['in_for_tgen']) && wafNodes[o]['in_for_tgen'].indexOf(n) > -1) {
-            console.log('getRelatedNodesForTGen adding: '+wafNodes[o]['name']+'to '+wafTaskGens[n])
             relatedNodes.push(o);
         }
     }
-    console.log('getRelatedNodesForTGen('+n+'): '+relatedNodes)
+    //console.log('getRelatedNodesForTGen('+wafTaskGens[n]['name']+'): '+relatedNodes)
     return relatedNodes;
 }
 
 // get all nodes, which are output of a task gen
 function getNodesOutOfTGen(n) {
-    relatedNodes=[];
+    output=[];
     for (var o in wafNodes) {
         if (wafNodes[o]['out_of_tgen'] == n) {
-            relatedNodes.push(o);
+            output.push(o);
         }
     }
-    console.log('getNodesOutOfTGen('+n+'): '+relatedNodes)
-    return relatedNodes;
+    //console.log('getNodesOutOfTGen('+wafTaskGens[n]['name']+'): '+output)
+    return output;
+}
+
+// get all nodes, which are input for a task gen
+function getNodesInForTGen(n) {
+    input=[];
+    for (var o in wafNodes) {
+        if (Array.isArray(wafNodes[o]['in_for_tgen']) && wafNodes[o]['in_for_tgen'].indexOf(n) > -1) {
+            input.push(o);
+        }
+    }
+    //console.log('getNodesInForTGen('+wafTaskGens[n]['name']+'): '+input)
+    return input;
 }
 
 // get all output-nodes of a task gen, which are input for any other task gen
@@ -263,8 +280,23 @@ function getNodesInForAnyOutOfTGen(n) {
             }
         }
     }
-    //console.log('getNodesInForAnyOutOfTGen('+n+'): '+relatedNodes)
+    //console.log('getNodesInForAnyOutOfTGen('+wafTaskGens[n]['name']+'): '+relatedNodes)
     return relatedNodes;
+}
+
+function getChildTGens(t) {
+    var children=[];
+    getNodesInForTGen(t).map(function(o) {
+        if (o in wafNodes) {
+            for (var m in wafTaskGens) {
+                if (getNodesOutOfTGen(m).indexOf(o) > -1) {
+                    children.push(m);
+                }
+            }
+        }
+    });
+    //console.log('getChildTGens('+wafTaskGens[t]['name']+'): '+children)
+    return children;
 }
 
 function storeNodes(wafNodesJSON) {
