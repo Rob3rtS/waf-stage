@@ -80,19 +80,24 @@ class VisRegistry:
 			#else:
 			#	jr[a]['visible']='true'
 			# might be redundant, but it should unify handling (see self.serialize_tgens())
-			jr[a]['colorkey']=art.suffix()
+			if art.suffix == art:
+				jr[a]['colorkey']='no_ext'
+			else:
+				jr[a]['colorkey']=art.suffix()
 			jr[a]['parents']=[x.vis_id() for x in art.vis_parents]
 			jr[a]['children']=[x.vis_id() for x in art.vis_children]
 			try:
 				jr[a]['out_of_tgen']=art.vis_out_of_tgen
 			except:
 				# probably happening for the leaf elements
-				print('no out_of_tgen for %s'%art.name)
+				#print('no out_of_tgen for %s'%art.name)
+				pass
 			try:
 				jr[a]['in_for_tgen']=list(art.vis_in_for_tgen)
 			except:
 				# probably happening for the root element
-				print('no in_for_tgen for %s'%art.name)
+				#print('no in_for_tgen for %s'%art.name)
+				pass
 		return json.dumps(jr)
 	def serialize_tgens(self):
 		# convert the objects to a data structure ready for being dumped as json
@@ -114,7 +119,10 @@ class VisRegistry:
 		# generate distinct colors
 		colors={}
 		i=0
-		for c in gethtmlcolors(self.color_keys.__len__()):
+		n=self.color_keys.__len__()
+		for c in gethtmlcolors(n):
+			if i >= n:
+				break
 			colors[self.color_keys[i]]=c
 			i+=1
 		return json.dumps(colors)
@@ -132,7 +140,6 @@ Task.Task.old_post_run=Task.Task.post_run
 def new_post_run(self):
 	self.old_post_run()
 	tg=self.generator
-	#print(tg.__dict__)
 	# explicit deps
 	expl_deps=self.inputs + self.dep_nodes
 	# omitting manual deps for now
