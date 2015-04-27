@@ -204,7 +204,7 @@ from waflib import c_preproc
 c_preproc.go_absolute = True
 ---------------
 
-Additional tools such as http://code.google.com/p/waf/source/browse/trunk/waflib/extras/gccdeps.py[gccdeps] or http://code.google.com/p/waf/source/browse/trunk/waflib/extras/dumbpreproc.py[dumbpreproc] provide alternate dependency scanners that can be faster in certain cases (boost).
+Additional tools such as https://github.com/waf-project/waf/blob/master/waflib/extras/gccdeps.py[gccdeps] or https://github.com/waf-project/waf/blob/master/waflib/extras//dumbpreproc.py[dumbpreproc] provide alternate dependency scanners that can be faster in certain cases (boost).
 
 NOTE: The Waf engine will detect if tasks generate headers necessary for the compilation and compute the build order accordingly. It may sometimes improve the performance of the scanner if the tasks creating headers provide the hint 'ext_out=[".h"]'.
 
@@ -304,7 +304,7 @@ def build(bld):
 ---------------
 
 <1> A simple shared library
-<2> The 'cshlib' flags will be propagated to both the library and the program. footnote:[To prevent the propagation, see http://code.google.com/p/waf/source/browse/trunk/docs/book/examples/cprog_propagation/wscript]
+<2> The 'cshlib' flags will be propagated to both the library and the program.
 <3> 'lib3' uses both a shared library and a static library
 <4> A program using 'lib3'
 
@@ -568,29 +568,31 @@ waf_config_files = ['/compilation/waf/demos/adv/build/config.h']
 
 ==== Advanced tests
 
-The methods 'conf.check' create a build context and a task generator internally. This means that the attributes 'includes', 'defines', 'cxxflags' may be used (not all shown here). Advanced tests may be created by passing feature arguments:
+The methods 'conf.check' create a build context and a task generator internally. This means that the attributes 'includes', 'defines', 'cxxflags' may be used (not all shown here). Yet some tests can be require several targets at once. In order to faciliate this, a custom build function can be passed directly, for example:
 
-// cprog_cfg_advanced
 [source,python]
 ---------------
-from waflib.TaskGen import feature, before_method
-
-@feature('special_test')
-@before_method('process_source')
-def my_special_test(self):
-	self.bld(rule='touch ${TGT}', target='foo') <1>
-	self.bld(rule='cp ${SRC} ${TGT}', source='foo', target='bar')
-	self.source = [] <2>
-
-def configure(conf):
-	conf.check_cc(features='special_test', msg='my test!') <3>
+def build(bld):
+	lib_node = bld.srcnode.make_node('libdir/iotest.c')
+	lib_node.parent.mkdir()
+	lib_node.write('#include <stdio.h>\nint lib_func(void) { FILE *f = fopen("foo", "r");}\n', 'w')
+	bld(features='c cshlib', source=[lib_node], linkflags=['-g3'], target='mylib')
+conf.check(build_fun=build, msg='Custom test')
 ---------------
 
-<1> Create a task generator from another task generator
-<2> Disable the compilation of +test.c+ by setting no source files
-<3> Use the feature special_test
+As a result, tests can also be written for other programming languages and compilers. Here is for example a custom test for LaTeX packages:
 
-==== Creating configuration headers
+[source,python]
+---------------
+def build_latex_test(bld):
+	def write_tex(tsk):
+		tsk.outputs[0].write(r'''\documentclass[a4paper,12pt]{article}  \usepackage{ucs}  \begin{document} test \end{document} ''')
+	bld(rule=write_tex, target='main.tex')
+	bld(features='tex', type='pdflatex', source='main.tex', prompt=0)
+conf.test(build_fun=build_latex_test, msg='Checking for UCS', okmsg='ok', errmsg='ucs.sty is missing install latex-extras')
+---------------
+
+==== Configuration headers
 
 Adding lots of command-line define values increases the size of the command-line and makes it harder to review the flags when errors occur. Besides that, the defines passed on the command-line may fail unexpectedly with different compilers and command execution contexts. For example, define values containing quotes may be misinterpreted in Visual Studio response files. It is therefore a best practice to use configuration headers whenever possible.
 
@@ -683,7 +685,7 @@ The outputs are written in the build directory into the file 'config.log':
 [source,shishell]
 ------------------
 # project  configured on Tue Aug 31 17:30:21 2010 by
-# waf 1.8.4 (abi 98, python 20605f0 on linux2)
+# waf {version} (abi 98, python 20605f0 on linux2)
 # using /home/waf/bin/waf configure
 #
 ---

@@ -479,7 +479,7 @@ def apply_implib(self):
 
 # ============ the code above must not know anything about vnum processing on unix platforms =========
 
-re_vnum = re.compile('^([1-9]\\d*|0)([.]([1-9]\\d*|0)[.]([1-9]\\d*|0))?$')
+re_vnum = re.compile('^([1-9]\\d*|0)([.]([1-9]\\d*|0)){0,2}?$')
 @feature('cshlib', 'cxxshlib', 'dshlib', 'fcshlib', 'vnum')
 @after_method('apply_link', 'propagate_uselib_vars')
 def apply_vnum(self):
@@ -499,7 +499,7 @@ def apply_vnum(self):
 
 	link = self.link_task
 	if not re_vnum.match(self.vnum):
-		raise Errors.WafError('Invalid version %r for %r' % (self.vnum, self))
+		raise Errors.WafError('Invalid vnum %r for target %r' % (self.vnum, getattr(self, 'name', self)))
 	nums = self.vnum.split('.')
 	node = link.outputs[0]
 
@@ -682,3 +682,22 @@ def read_object(self, obj):
 	if not isinstance(obj, self.path.__class__):
 		obj = self.path.find_resource(obj)
 	return self(features='fake_obj', source=obj, name=obj.name)
+
+@feature('cxxprogram', 'cprogram')
+@after_method('apply_link', 'process_use')
+def set_full_paths_hpux(self):
+	"""
+	On hp-ux, extend the libpaths and static library paths to absolute paths
+	"""
+	if self.env.DEST_OS != 'hp-ux':
+		return
+	base = self.bld.bldnode.abspath()
+	for var in ['LIBPATH', 'STLIBPATH']:
+		lst = []
+		for x in self.env[var]:
+			if x.startswith('/'):
+				lst.append(x)
+			else:
+				lst.append(os.path.normpath(os.path.join(base, x)))
+		self.env[var] = lst
+

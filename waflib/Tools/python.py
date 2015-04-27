@@ -162,6 +162,7 @@ def init_pyext(self):
 @feature('pyext')
 @before_method('apply_link', 'apply_bundle')
 def set_bundle(self):
+	"""Mac-specific pyext extension that enables bundles from c_osx.py"""
 	if Utils.unversioned_sys_platform() == 'darwin':
 		self.mac_bundle = True
 
@@ -461,7 +462,7 @@ def check_python_version(conf, minver=None):
 					   "get_python_lib(standard_lib=0) or ''"])
 			else:
 				python_LIBDEST = None
-				(pydir,) = conf.get_python_variables( ["get_python_lib(standard_lib=0) or ''"])
+				(pydir,) = conf.get_python_variables( ["get_python_lib(standard_lib=0, prefix='%s') or ''" % conf.env['PREFIX']])
 			if python_LIBDEST is None:
 				if conf.env['LIBDIR']:
 					python_LIBDEST = os.path.join(conf.env['LIBDIR'], "python" + pyver)
@@ -476,7 +477,7 @@ def check_python_version(conf, minver=None):
 			pyarchdir = conf.environ['PYTHONARCHDIR']
 		else:
 			# Finally, try to guess
-			(pyarchdir, ) = conf.get_python_variables( ["get_python_lib(plat_specific=1, standard_lib=0) or ''"])
+			(pyarchdir, ) = conf.get_python_variables( ["get_python_lib(plat_specific=1, standard_lib=0, prefix='%s') or ''" % conf.env['PREFIX']])
 			if not pyarchdir:
 				pyarchdir = pydir
 
