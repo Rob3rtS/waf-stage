@@ -29,7 +29,7 @@ INSTALL = 1337
 UNINSTALL = -1337
 """Negative value '<-' uninstall, see :py:attr:`waflib.Build.BuildContext.is_install`"""
 
-SAVED_ATTRS = 'root node_deps raw_deps task_sigs'.split()
+SAVED_ATTRS = 'root node_deps raw_deps task_sigs frozen_sigs'.split()
 """Build class members to save between the runs (root, node_deps, raw_deps, task_sigs)"""
 
 CFG_FILES = 'cfg_files'
@@ -78,6 +78,9 @@ class BuildContext(Context.Context):
 
 		self.task_sigs = {}
 		"""Signatures of the tasks (persists between build executions)"""
+
+		self.frozen_sigs = {}
+		"""Signatures of tasks for suppressing rebuilds"""
 
 		self.node_deps = {}
 		"""Dict of node dependencies found by :py:meth:`waflib.Task.Task.scan` (persists between build executions)"""
