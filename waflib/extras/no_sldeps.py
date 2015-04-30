@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# encoding: utf-8
+# Robert Schuster, 2015
+
+# Suppress relinking when only sources of a shared lib have changed
+
 from waflib import Task, TaskGen, Logs
 from waflib.Utils import to_list, to_hex
 from waflib.Tools import c, cxx
