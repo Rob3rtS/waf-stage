@@ -4,7 +4,8 @@
 var container = document.getElementById('dependencies');
 
 var options = {
-    //stabilize: false,
+    //
+    stabilize: false,
     maxVelocity:  5,
     edges: {
         style: 'arrow'
@@ -130,9 +131,13 @@ network.on('doubleClick', function(params) {
 
 function explode(id){
     if (id == 'rootTG') {
-        return;
+        //return;
+	var children=getChildTGens(id);
+        children.map(function(t){
+             showTGen(t);
+        });
     }
-    if (id in wafTaskGens) {
+    else if (id in wafTaskGens) {
         wafTaskGens[id]['visible']='false';
         var relatedNodes=[];
         if (keyRecursive == true) {
@@ -151,17 +156,18 @@ function explode(id){
         relatedNodes.map(function(n){
             showNode(n);
         });
-        // the entire network is reorganized completely new, all elements are shifted
-        // use add/remove for nodes and edges to have a smooth change
-        calcVis();
     }
     else if (id in wafNodes) {
         var relatedNodes=wafNodes[id]['children'];
         relatedNodes.map(function(n){
             showNode(n);
         });
-        calcVis();
     }
+    calcVis();
+}
+
+function showTGen(n) {
+    wafTaskGens[n]['visible']='true';
 }
 
 function showNode(n) {

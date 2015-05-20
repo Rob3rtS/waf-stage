@@ -112,7 +112,7 @@ class VisRegistry:
 			art=self.tgens[a]
 			jr[a]={}
 			jr[a]['name']=art.get_name()
-			jr[a]['visible']='true'
+			jr[a]['visible']='false'
 			jr[a]['colorkey']=art.vis_featureset
 		return json.dumps(jr)
 	def serialize_colors(self):
