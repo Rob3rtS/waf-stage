@@ -38,6 +38,7 @@ def configure(conf):
 		node.write(txt)
 
 	conf.load('visualization')
+	conf.env.VIS_SUPPRESS_TASKS=['vnum']
 
 from waflib import Utils, Build
 class buildall_ctx(Build.BuildContext):

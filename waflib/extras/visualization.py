@@ -6,7 +6,6 @@
 Visualization of build dependencies on file level.
 Generate JavaScript code for use with:
 vis.js: http://visjs.org/index.html
-JavaScript InfoVis Toolkit: http://philogb.github.io/jit/
 
 Provide a possibility for explorative visualization of dependencies.
 Only files related to targets, which have been built or re-built, will be taken into account.
@@ -30,6 +29,7 @@ class VisRegistry:
 		self.artifacts = {}
 		self.tgens = {}
 		self.bld=bld
+		self.roots=set()
 		# list of all encountered file extensions and feature combinations for colorization
 		self.color_keys=[]
 	def add_artifact(self, _node):
@@ -44,21 +44,25 @@ class VisRegistry:
 		fp=_tg.vis_featureset
 		if fp and not fp in self.color_keys:
 			self.color_keys.append(fp)
-	def get_rootelems(self):
-		roots=set()
+	def set_rootelems(self):
 		for i in self.artifacts.values():
-			if not i.vis_parents:
-				roots.add(i)
-		return roots
+			if hasattr(i, 'vis_parents'):
+				if not i.vis_parents:
+					self.roots.add(i)
+			else:
+				print('Info: Node %s has no parent'%i.abspath())
+	def get_rootelems(self):
+		return self.roots
 	def create_project(self):
 		project=getattr(Context.g_module, 'APPNAME', 'noname')
-		self.project=project
+		#self.project=project
 		prod=self.bld.path.find_or_declare(project)
 		prod.vis_out_of_tgen='rootTG'
 		if not hasattr(prod, 'vis_children'):
 			prod.vis_children=set()
+		self.set_rootelems()
 		for i in self.get_rootelems():
-			print('create project - add root elem: %s'%i)
+			#print('create project - add root elem: %s'%i)
 			prod.vis_children.add(i)
 			i.vis_parents.add(prod)
 			if not hasattr(i, 'vis_in_for_tgen'):
@@ -73,6 +77,12 @@ class VisRegistry:
 		for a in self.artifacts:
 			# a (the key) is also the id - create a dict of dicts
 			art=self.artifacts[a]
+			# skip files produced by task classes to be suppressed
+			#~ try:
+				#~ if art.vis_task_class in self.bld.env.VIS_SUPPRESS_TASKS:
+					#~ continue
+			#~ except AttributeError:
+				#~ pass
 			jr[a]={}
 			jr[a]['name']=art.name
 			#if art.vis_out_of_tgen == 'rootTG':
@@ -93,12 +103,12 @@ class VisRegistry:
 				#print('no out_of_tgen for %s'%art.name)
 				pass
 			try:
-				jr[a]['in_for_tgen']=list(art.vis_in_for_tgen)
+				jr[a]['in_for_tgen']=[x for x in art.vis_in_for_tgen]
 			except:
 				# probably happening for the root element
 				#print('no in_for_tgen for %s'%art.name)
 				pass
-		return json.dumps(jr)
+		return json.dumps(jr, indent=1)
 	def serialize_tgens(self):
 		# convert the objects to a data structure ready for being dumped as json
 		jr={}
@@ -106,15 +116,29 @@ class VisRegistry:
 		jr['rootTG']['name']=self.project.name
 		jr['rootTG']['visible']='true'
 		jr['rootTG']['colorkey']='rootTG'
+		jr['rootTG']['in_nodes']=[x.vis_id() for x in self.get_rootelems()]
+		jr['rootTG']['out_nodes']=[self.project.vis_id()]
 		self.color_keys.append('rootTG')
 		for a in self.tgens:
 			# a (the key) is also the id - create a dict of dicts
 			art=self.tgens[a]
 			jr[a]={}
-			jr[a]['name']=art.get_name()
+			jr[a]['name']=art.vis_name()
 			jr[a]['visible']='false'
 			jr[a]['colorkey']=art.vis_featureset
-		return json.dumps(jr)
+			jr[a]['in_nodes']=[x for x in art.vis_in_nodes]
+			jr[a]['out_nodes']=[x for x in art.vis_out_nodes]
+			tmp=''
+			try:
+				#tmp=json.dumps(jr, indent=1)
+				tmp=tmp+json.dumps(jr[a]['name'], indent=1)
+				tmp=tmp+json.dumps(jr[a]['colorkey'], indent=1)
+				tmp=tmp+json.dumps(jr[a]['in_nodes'], indent=1)
+				tmp=tmp+json.dumps(jr[a]['out_nodes'], indent=1)
+			except:
+					print('art: %s - type: %s - out_nodes: %r'%(art.path.abspath(), type(jr[a]['name']), [x for x in art.vis_out_nodes]))
+					raise
+		return json.dumps(jr, indent=1)
 	def serialize_colors(self):
 		# generate distinct colors
 		colors={}
@@ -140,6 +164,10 @@ Task.Task.old_post_run=Task.Task.post_run
 def new_post_run(self):
 	self.old_post_run()
 	tg=self.generator
+	#print('post run - tg: %r'%tg)
+	if not tg.__class__.__name__ == 'task_gen':
+		print('self.generator is not a task_gen:\nname %r => class %s'%(tg, tg.__class__.__name__))
+		return
 	# explicit deps
 	expl_deps=self.inputs + self.dep_nodes
 	# omitting manual deps for now
@@ -147,9 +175,12 @@ def new_post_run(self):
 	impl_deps=[]
 	# default: show also implicit dependencies
 	env=self.generator.bld.env
-	if not 'vis_show_implicit' in env:
-		env['vis_show_implicit']='True'
-	if env['vis_show_implicit'] == 'True':
+	if self.__class__.__name__ in env.VIS_SUPPRESS_TASKS:
+		return
+
+	if not 'VIS_SHOW_IMPLICIT' in env:
+		env['VIS_SHOW_IMPLICIT']='True'
+	if env['VIS_SHOW_IMPLICIT'] == 'True':
 		try:
 			impl_deps=self.generator.bld.node_deps[self.uid()]
 		except KeyError:
@@ -162,6 +193,11 @@ def new_post_run(self):
 		# we are in a build context, where vis_registry is missing - likely a configuration check task
 		return
 	vr.add_tgen(tg)
+	if not hasattr(tg, 'vis_in_nodes'):
+		tg.vis_in_nodes=set()
+	if not hasattr(tg, 'vis_out_nodes'):
+		tg.vis_out_nodes=set()
+
 	for dep in expl_deps + impl_deps:
 		if not hasattr(dep, 'vis_parents'):
 			dep.vis_parents=set()
@@ -170,6 +206,7 @@ def new_post_run(self):
 			dep.vis_in_for_tgen=set()
 		# a task gen can have several inputs
 		dep.vis_in_for_tgen.add(tg.vis_id())
+		tg.vis_in_nodes.add(dep.vis_id())
 		vr.add_artifact(dep)
 	for out in self.outputs:
 		if not hasattr(out, 'vis_children'):
@@ -178,6 +215,11 @@ def new_post_run(self):
 		# a node can be the output of only a single task gen
 		# but a task gen can have several outputs
 		out.vis_out_of_tgen=tg.vis_id()
+		out.vis_task_class=self.__class__.__name__
+		if not out.__class__.__name__ == 'Nod3':
+			print('out is not a Node:\nname %r => class %s'%(out, tg.__class__.__name__))
+
+		tg.vis_out_nodes.add(out.vis_id())
 		vr.add_artifact(out)
 
 Task.Task.post_run=new_post_run
@@ -206,17 +248,30 @@ Node.Node.vis_id=vis_nd_id
 TaskGen.task_gen.old__init__=TaskGen.task_gen.__init__
 def vis_tg__init__(self, *k, **kw):
 	self.old__init__(*k, **kw)
-	# use the same color for all task gens with the same sef of features
+	# use the same color for all task gens with the same set of features
 	self.vis_featureset="_".join(sorted(Utils.to_list(self.features)))
 def vis_tg_id(self):
 	# assumption: combination of task generator name and its path is usually unique, so use it as ID
-	tp=self.path.abspath()+os.sep+self.get_name()
+	#print('vis_tg_id: %r'%self.get_name())
+	try:
+		tp=self.path.abspath()+os.sep+self.get_name()
+	except:
+		tp=self.path.abspath()+os.sep+str(self.idx)
 	m=Utils.md5()
 	m.update(tp.encode())
 	return binascii.hexlify(m.digest()).decode()
+def vis_tg_name(self):
+	try:
+		n=self.get_name()
+		if n.__class__.__name__ == 'task_gen':
+			n=''
+	except:
+		n=''
+	return n
 
 TaskGen.task_gen.__init__=vis_tg__init__
 TaskGen.task_gen.vis_id=vis_tg_id
+TaskGen.task_gen.vis_name=vis_tg_name
 
 #################
 # Color Generator

@@ -5,10 +5,12 @@ var container = document.getElementById('dependencies');
 
 var options = {
     //
-    stabilize: false,
-    maxVelocity:  5,
+    //~ physics: {
+        //~ stabilization: false
+    //~ },
     edges: {
-        style: 'arrow'
+        arrows: 'to',
+        smooth: {type:'continuous'}
     }
 };
 
@@ -17,6 +19,8 @@ var wafTaskGens;
 var wafColors;
 var keyRecursive=false;
 var limit=100;
+var rootIsExploded=false;
+var edgeCache=[];
 
 // trying to load .json files from any directory other than the current or a subdirectory fails due to a browser security policy
 loadJSON("./wafNodes.json",storeNodes);
@@ -32,79 +36,20 @@ var data = {
 var network = new vis.Network(container, data, options);
 
 function calcVis() {
-    for (var ndId in wafNodes) {
-        if (wafNodes[ndId]['visible'] == 'false') {
-            // this node is input for the following task gens:
-            var inForTGens=wafNodes[ndId]['in_for_tgen'];
-            // connect all task gens with edges, where this node is input for one and output of another
-            var outTgId=wafNodes[ndId]['out_of_tgen'];
-            if (inForTGens) {
-                //console.log('node: '+wafNodes[ndId]['name']+' -> inForTGens: '+inForTGens.map(function(x){return wafTaskGens[x]['name'];}).toString());
-                inForTGens.map(function(n) {
-                    // show the task gen
-                    if (n == undefined || outTgId == undefined) {
-                        return;
-                    }
-                    if (wafTaskGens[n]['visible'] == 'true') {
-                        var combi=outTgId+'_'+n;
-                        if (n != outTgId) {
-                            // edges.update() makes sure to add the edge between 2 task gens only once
-                            edges.update({id: combi, from: outTgId, to: n});
-                        }
-                    }
-                    else {
-                        // create edges between from this task gen to the nodes of the exploded task gen
-                        var relatedNodes=getNodesInForAnyOutOfTGen(n);
-                        relatedNodes.map(function(m){
-                            var combi=outTgId+'_'+m;
-                            if (m != outTgId) {
-                                edges.update({id: combi, from: outTgId, to: m});
-                            }
-                        });
-                    }
-                })
-            }
-        }
-        else {
-            // this node shall be visible - can it be connected directly to its parent node or to the task gen, for which the parent is an output?
-            var parents=wafNodes[ndId]['parents'];
-            parents.map(function(p) {
-                    if (wafNodes[p]['visible'] == 'true') {
-                        var combi=ndId+'_'+p;
-                        edges.update({id: combi, from: ndId, to: p});
-                    }
-                    else {
-                        var outTgId=wafNodes[p]['out_of_tgen'];
-                        if (outTgId == undefined) {
-                            return;
-                        }
-                        var combi=ndId+'_'+outTgId;
-                        //console.log(wafNodes[ndId]['name']+': '+combi);
-                        if (ndId == outTgId) {
-                            console.log('skipping edge: '+ndId+' == '+outTgId);
-                            return;
-                        }
-                        // make sure to add the edge between 2 task gens only once
-                        if (ndId != outTgId) {
-                            edges.update({id: combi, from: ndId, to: outTgId});
-                        }
-                    }
-                }
-            )
-        }
-    }
-
+    console.time('calcVis');
     // add nodes for all visible elements
     for (var ndId in wafNodes) {
         if (wafNodes[ndId]['visible'] == 'true') {
             //console.log('node '+wafNodes[ndId]['name']+': '+wafNodes[ndId]['visible']);
             nodes.update({id: ndId, label: wafNodes[ndId]['name'], shape: "box", color: wafColors[wafNodes[ndId]['colorkey']]});
+            //nodes.update({id: ndId, label: wafNodes[ndId]['name']});
         }
         else {
             nodes.remove(ndId);
-            edges.map(function(e) {
+            edges.forEach(function(e) {
                 if (e.from == ndId || e.to == ndId) {
                     edges.remove(e.id);
+                    delete edgeCache[e.id];
                 }
             });
         }
@@ -119,10 +64,99 @@ function calcVis() {
             edges.map(function(e) {
                 if (e.from == tgId || e.to == tgId) {
                     edges.remove(e.id);
+                    delete edgeCache[e.id];
                 }
             });
         }
     }
+
+    for (var ndId in wafNodes) {
+        if (wafNodes[ndId]['visible'] == 'false') {
+            // this node is input for the following task gens:
+            var inForTGens=wafNodes[ndId]['in_for_tgen'];
+            // connect all task gens with edges, where this node is input for one and output of another
+            var outTgId=wafNodes[ndId]['out_of_tgen'];
+            //console.log('outTgId for node '+wafNodes[ndId]['name']+': '+outTgId);
+            if (outTgId in wafTaskGens && wafTaskGens[outTgId]['visible'] == 'false') {
+                //console.log(wafNodes[ndId]['name']+': NO outTgId -> skipping edge creation');
+                continue;
+            }
+            if (inForTGens) {
+                //console.log('node: '+wafNodes[ndId]['name']+' -> inForTGens: '+inForTGens.map(function(x){return wafTaskGens[x]['name'];}).toString());
+                for (var i=0; i<inForTGens.length; i++) {
+                    var n=inForTGens[i];
+                    //inForTGens.map(function(n) {
+                    // show the task gen
+                    if (n == undefined || outTgId == undefined) {
+                        //return;
+                        break;
+                    }
+                    if (wafTaskGens[n]['visible'] == 'true') {
+                        var combi=outTgId+'_'+n;
+                        if (n != outTgId) {
+                            // edges.update() makes sure to add the edge between 2 task gens only once
+                            if (!(combi in edgeCache)) {
+                                edges.update({id: combi, from: outTgId, to: n});
+                                edgeCache[combi]=1;
+                            }
+                        }
+                    }
+                    else {
+                        // create edges between from this task gen to the nodes of the exploded task gen
+                        var relatedNodes=getNodesInForAnyOutOfTGen(n);
+                        for (var i=0; i<relatedNodes.length; i++) {
+                        //relatedNodes.map(function(m){
+                            var m=relatedNodes[i];
+                            var combi=outTgId+'_'+m;
+                            if (m != outTgId) {
+                                if (!(combi in edgeCache)) {
+                                    edges.update({id: combi, from: outTgId, to: m});
+                                    edgeCache[combi]=1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            // this node shall be visible - can it be connected directly to its parent node or to the task gen, for which the parent is an output?
+            var parents=wafNodes[ndId]['parents'];
+            for (var i=0; i<parents.length; i++) {
+                var p=parents[i];
+                //parents.map(function(p) {
+                    if (wafNodes[p]['visible'] == 'true') {
+                        var combi=ndId+'_'+p;
+                        if (!(combi in edgeCache)) {
+                            edges.update({id: combi, from: ndId, to: p});
+                            edgeCache[combi]=1;
+                        }
+                    }
+                    else {
+                        var outTgId=wafNodes[p]['out_of_tgen'];
+                        if (outTgId == undefined) {
+                            break;
+                        }
+                        var combi=ndId+'_'+outTgId;
+                        //console.log(wafNodes[ndId]['name']+': '+combi);
+                        if (ndId == outTgId) {
+                            console.log('skipping edge: '+ndId+' == '+outTgId);
+                            break;
+                        }
+                        // make sure to add the edge between 2 task gens only once
+                        if (ndId != outTgId) {
+                            if (!(combi in edgeCache)) {
+                                edges.update({id: combi, from: ndId, to: outTgId});
+                                edgeCache[combi]=1;
+                            }
+                        }
+                    }
+            }
+        }
+    }
+
+
+    console.timeEnd('calcVis');
 }
 
 network.on('doubleClick', function(params) {
@@ -131,11 +165,13 @@ network.on('doubleClick', function(params) {
 
 function explode(id){
     if (id == 'rootTG') {
-        //return;
-	var children=getChildTGens(id);
-        children.map(function(t){
-             showTGen(t);
-        });
+        if (rootIsExploded == true) { return; }
+        var children=getChildTGens(id);
+        for (var i=0; i<children.length; i++) {
+        //children.map(function(t){
+             showTGen(children[i]);
+        }
+        rootIsExploded=true;
     }
     else if (id in wafTaskGens) {
         wafTaskGens[id]['visible']='false';
@@ -144,18 +180,18 @@ function explode(id){
             relatedNodes=getRelatedNodesForTGen(id);
             // find all task gens, which are putting out any nodes, which are input for this task gen
             var relatedTGens=getChildTGens(id);
-            relatedTGens.map(function(t){
-                if (wafTaskGens[t]['visible'] == 'true') {
-                    explode(t);
+            for (var i=0; i<relatedTGens.length; i++) {
+                if (wafTaskGens[relatedTGens[i]]['visible'] == 'true') {
+                    explode(relatedTGens[i]);
                 }
-            });
+            }
         }
         else {
             relatedNodes=getNodesOutOfTGen(id);
         }
-        relatedNodes.map(function(n){
-            showNode(n);
-        });
+        for (var i=0; i<relatedNodes.length; i++) {
+            showNode(relatedNodes[i]);
+        }
     }
     else if (id in wafNodes) {
         var relatedNodes=wafNodes[id]['children'];
@@ -220,63 +256,30 @@ function init() {
 }
 window.onload=init;
 
-function getTGensInFor(id) {
-    var result=[];
-    for (var ndId in wafNodes) {
-        if (id === wafNodes[ndId]['in_for_tgen']) {
-            result.push(ndId);
-        }
-    }
-    return result;
-}
-
 // get all nodes, which are input for OR output of a task gen
 function getRelatedNodesForTGen(n) {
-    relatedNodes=[];
-    for (var o in wafNodes) {
-        if (wafNodes[o]['out_of_tgen'] == n) {
-            relatedNodes.push(o);
-        }
-        if (Array.isArray(wafNodes[o]['in_for_tgen']) && wafNodes[o]['in_for_tgen'].indexOf(n) > -1) {
-            relatedNodes.push(o);
-        }
-    }
-    //console.log('getRelatedNodesForTGen('+wafTaskGens[n]['name']+'): '+relatedNodes)
-    return relatedNodes;
+    return wafTaskGens[n]['out_nodes'].concat(wafTaskGens[n]['in_nodes']);
 }
 
 // get all nodes, which are output of a task gen
 function getNodesOutOfTGen(n) {
-    output=[];
-    for (var o in wafNodes) {
-        if (wafNodes[o]['out_of_tgen'] == n) {
-            output.push(o);
-        }
-    }
-    //console.log('getNodesOutOfTGen('+wafTaskGens[n]['name']+'): '+output)
-    return output;
+    return wafTaskGens[n]['out_nodes'];
 }
 
 // get all nodes, which are input for a task gen
 function getNodesInForTGen(n) {
-    input=[];
-    for (var o in wafNodes) {
-        if (Array.isArray(wafNodes[o]['in_for_tgen']) && wafNodes[o]['in_for_tgen'].indexOf(n) > -1) {
-            input.push(o);
-        }
-    }
-    //console.log('getNodesInForTGen('+wafTaskGens[n]['name']+'): '+input)
-    return input;
+    return wafTaskGens[n]['in_nodes'];
 }
 
 // get all output-nodes of a task gen, which are input for any other task gen
 function getNodesInForAnyOutOfTGen(n) {
-    relatedNodes=[];
-    for (var o in wafNodes) {
-        if (wafNodes[o]['out_of_tgen'] == n) {
+    //console.time('getNodesInForAnyOutOfTGen');
+    var relatedNodes=[];
+    for (var i in wafTaskGens[n]['out_nodes']) {
+        var o=wafTaskGens[n]['out_nodes'][i];
             var f=false;
             for (var m in wafTaskGens) {
-                if (Array.isArray(wafNodes[o]['in_for_tgen']) && wafNodes[o]['in_for_tgen'].indexOf(m) > -1 && n != m) {
+                if (Array.isArray(wafTaskGens[m]['in_nodes']) && wafTaskGens[m]['in_nodes'].indexOf(o) > -1 && n != m) {
                     f=true;
                     break;
                 }
@@ -284,13 +287,15 @@ function getNodesInForAnyOutOfTGen(n) {
             if (f) {
                 relatedNodes.push(o);
             }
-        }
     }
+    
     //console.log('getNodesInForAnyOutOfTGen('+wafTaskGens[n]['name']+'): '+relatedNodes)
+    //console.timeEnd('getNodesInForAnyOutOfTGen');
     return relatedNodes;
 }
 
 function getChildTGens(t) {
+    //console.time('getChildTGens');
     var children=[];
     getNodesInForTGen(t).map(function(o) {
         if (o in wafNodes) {
@@ -302,22 +307,24 @@ function getChildTGens(t) {
         }
     });
     //console.log('getChildTGens('+wafTaskGens[t]['name']+'): '+children)
+    //console.timeEnd('getChildTGens');
     return children;
 }
 
 function storeNodes(wafNodesJSON) {
-    wafNodes=wafNodesJSON
+    wafNodes=wafNodesJSON;
 }
 
 function storeTaskGens(wafTaskGensJSON) {
-    wafTaskGens=wafTaskGensJSON
+    wafTaskGens=wafTaskGensJSON;
 }
 
 function storeColors(wafColorsJSON) {
-    wafColors=wafColorsJSON
+    wafColors=wafColorsJSON;
 }
 
 function loadJSON(path, success, error) {
+    console.time('loadJSON');
     var xhr = new XMLHttpRequest();
     xhr.onreadystatechange = function() {
         if (xhr.readyState === 4) {
@@ -331,5 +338,6 @@ function loadJSON(path, success, error) {
     };
     // for now, use synchronous request: false
     xhr.open("GET", path, false);
+    console.timeEnd('loadJSON');
     xhr.send();
 }

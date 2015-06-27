@@ -111,7 +111,9 @@ class task_gen(object):
 		lst = []
 		for x in self.__dict__.keys():
 			if x not in ('env', 'bld', 'compiled_tasks', 'tasks'):
-				lst.append("%s=%s" % (x, repr(getattr(self, x))))
+				attr=getattr(self, x)
+				if not attr.__class__.__name__ == 'task_gen':
+					lst.append("%s=%s" % (x, repr(attr)))
 		return "bld(%s) in %s" % (", ".join(lst), self.path.abspath())
 
 	def get_name(self):
