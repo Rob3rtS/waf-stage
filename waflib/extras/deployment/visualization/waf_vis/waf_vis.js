@@ -241,6 +241,7 @@ function countItems() {
 
 function init() {
     calcVis();
+    explode('rootTG');
     // when Ctrl-key is pressed during doubleclick: explode the task gen "recursively"
     window.onkeydown = function(e){
         if (e.keyCode == 17) {

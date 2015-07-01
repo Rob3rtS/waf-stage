@@ -15,6 +15,7 @@ import re
 import os
 import json
 import random
+import shutil
 import colorsys
 from waflib import Task, TaskGen, Node, Utils, Context
 
@@ -151,11 +152,15 @@ class VisRegistry:
 			i+=1
 		return json.dumps(colors)
 	def visualize_nodes(self):
-		# write the data structures to json files
 		def tmp(bld):
-			Utils.writef(bld.bldnode.abspath()+os.sep+'wafNodes.json', bld.vis_registry.serialize_nodes())
-			Utils.writef(bld.bldnode.abspath()+os.sep+'wafTaskGens.json', bld.vis_registry.serialize_tgens())
-			Utils.writef(bld.bldnode.abspath()+os.sep+'wafColors.json', bld.vis_registry.serialize_colors())
+			# deploy resources
+			src=os.path.join(os.path.dirname(__file__), 'deployment', 'visualization')
+			dst=os.path.join(bld.bldnode.abspath(), 'visualization')
+			shutil.copytree(src, dst)
+			# write the data structures to json files
+			Utils.writef(os.path.join(dst, 'wafNodes.json'), bld.vis_registry.serialize_nodes())
+			Utils.writef(os.path.join(dst, 'wafTaskGens.json'), bld.vis_registry.serialize_tgens())
+			Utils.writef(os.path.join(dst, 'wafColors.json'), bld.vis_registry.serialize_colors())
 		return tmp
 
 
