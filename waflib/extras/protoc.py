@@ -51,8 +51,6 @@ class protoc(Task):
 
 		if not node: return (nodes, names)
 
-		search_paths = [self.generator.path.find_node(x) for x in self.generator.includes]
-
 		def parse_node(node):
 			if node in seen:
 				return
@@ -62,7 +60,7 @@ class protoc(Task):
 				m = re.search(r'^import\s+"(.*)";.*(//)?.*', line)
 				if m:
 					dep = m.groups()[0]
-					for incpath in search_paths:
+					for incpath in self.env.INCPATHS:
 						found = incpath.find_resource(dep)
 						if found:
 							nodes.append(found)
@@ -82,7 +80,7 @@ def process_protoc(self, node):
 
 	if 'cxx' in self.features and not self.env.PROTOC_FLAGS:
 		#self.env.PROTOC_FLAGS = '--cpp_out=%s' % node.parent.get_bld().abspath() # <- this does not work
-		self.env.PROTOC_FLAGS = '--cpp_out=.'
+		self.env.PROTOC_FLAGS = '--cpp_out=%s' % node.parent.get_bld().bldpath()
 
 	use = getattr(self, 'use', '')
 	if not 'PROTOBUF' in use:

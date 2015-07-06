@@ -1,3 +1,42 @@
+NEW IN WAF 1.8.12
+-----------------
+* Fixed a regression when building in sub-folders - https://github.com/waf-project/waf/issues/1590
+* New mac_files attribute which is expected to replace mac_resources in waf 1.9 (demos/mac_app/)
+* env = env.derive().detach() to simplify deep copies
+
+NEW IN WAF 1.8.11
+-----------------
+* Fortran fixes https://github.com/waf-project/waf/issues/1580
+* Enabled installation of generated .py files
+* Fixed the '--threading' option for valac https://github.com/waf-project/waf/issues/1577
+* Shared library compatibility version handling on OSX
+
+NEW IN WAF 1.8.10
+-----------------
+* Replace cygwin paths in solution files - https://github.com/waf-project/waf/issues/1562
+* Fixed the hcode in why.py - https://github.com/waf-project/waf/issues/1561
+* Enabled execution from any folder: "waf configure --top=/arbitrary/folder --out=/tmp/build"
+* Enabled stateless out-of-tree builds by default: "waf configure --no-lock-in-top --no-lock-in-run"
+* Fixed the waf file generation on windows in Waf 1.8.9
+* Add OS flags such as LDFLAGS only once - https://github.com/waf-project/waf/issues/1574
+* Fixed conf.multicheck error handling
+
+NEW IN WAF 1.8.9
+----------------
+* VS 2013 supports cross-compiling for x86 and arm from amd64
+* Perl detection enhancements on Redhat systems
+* More accurate rpath parsing in check_cfg
+
+NEW IN WAF 1.8.8
+----------------
+* Fixed a regression in Fortran builds #1546
+* Fixed a regression in the libdir installation path on 32-bit ubuntu #1552
+* Process -Bstatic and -Bdynamic in parse_flags (pkg-config tools)
+* Fortran compiler detection to cover the sxf03 as well as the sxf90
+* Jython detection enhancements
+* Doxygen tool enhancements
+* Moved the project to Github/waf.io and updated the documentation
+
 NEW IN WAF 1.8.7
 ----------------
 * Fixed the default libdir installation suffix on Redhat 64-bit systems #1536

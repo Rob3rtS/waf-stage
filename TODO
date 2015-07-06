@@ -6,12 +6,12 @@ Waf 1.9
 * Remove the split functions from Utils
 * Ensure _cache.py are valid python files
 * Include the tool 'nobuild' by default
-* Support for linkflags/cflags at the end of commands
+* cflags in the beginning / cppflags at the end
+* remove qt4 from the default modules, rework qt5
+* remove the command called "update"
 
 Waf 1.8.x
 ---------
-
-* Update the docs
 
 Can be useful:
 
