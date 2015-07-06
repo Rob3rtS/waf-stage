@@ -79,7 +79,6 @@ def process_py(self, node):
 	"""
 	Add signature of .py file, so it will be byte-compiled when necessary
 	"""
-	assert(node.get_bld_sig())
 	assert(getattr(self, 'install_path')), 'add features="py"'
 
 	# where to install the python file
@@ -462,7 +461,7 @@ def check_python_version(conf, minver=None):
 					   "get_python_lib(standard_lib=0) or ''"])
 			else:
 				python_LIBDEST = None
-				(pydir,) = conf.get_python_variables( ["get_python_lib(standard_lib=0, prefix='%s') or ''" % conf.env['PREFIX']])
+				(pydir,) = conf.get_python_variables( ["get_python_lib(standard_lib=0, prefix=%r) or ''" % conf.env.PREFIX])
 			if python_LIBDEST is None:
 				if conf.env['LIBDIR']:
 					python_LIBDEST = os.path.join(conf.env['LIBDIR'], "python" + pyver)
@@ -477,7 +476,7 @@ def check_python_version(conf, minver=None):
 			pyarchdir = conf.environ['PYTHONARCHDIR']
 		else:
 			# Finally, try to guess
-			(pyarchdir, ) = conf.get_python_variables( ["get_python_lib(plat_specific=1, standard_lib=0, prefix='%s') or ''" % conf.env['PREFIX']])
+			(pyarchdir, ) = conf.get_python_variables( ["get_python_lib(plat_specific=1, standard_lib=0, prefix=%r) or ''" % conf.env.PREFIX])
 			if not pyarchdir:
 				pyarchdir = pydir
 

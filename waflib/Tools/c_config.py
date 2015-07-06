@@ -383,7 +383,9 @@ def check_cfg(self, *k, **kw):
 			conf.check_cfg(path='sdl-config', args='--cflags --libs', package='', uselib_store='SDL')
 			conf.check_cfg(path='mpicc', args='--showme:compile --showme:link',
 				package='', uselib_store='OPEN_MPI', mandatory=False)
-
+			# variables
+			conf.check_cfg(package='gtk+-2.0', variables=['includedir', 'prefix'], uselib_store='FOO')
+			print(conf.env.FOO_includedir)
 	"""
 	if k:
 		lst = k[0].split()
@@ -931,24 +933,24 @@ def cc_add_flags(conf):
 	"""
 	Add CFLAGS / CPPFLAGS from os.environ to conf.env
 	"""
-	conf.add_os_flags('CPPFLAGS', 'CFLAGS')
-	conf.add_os_flags('CFLAGS')
+	conf.add_os_flags('CPPFLAGS', dup=False)
+	conf.add_os_flags('CFLAGS', dup=False)
 
 @conf
 def cxx_add_flags(conf):
 	"""
 	Add CXXFLAGS / CPPFLAGS from os.environ to conf.env
 	"""
-	conf.add_os_flags('CPPFLAGS', 'CXXFLAGS')
-	conf.add_os_flags('CXXFLAGS')
+	conf.add_os_flags('CPPFLAGS', dup=False)
+	conf.add_os_flags('CXXFLAGS', dup=False)
 
 @conf
 def link_add_flags(conf):
 	"""
 	Add LINKFLAGS / LDFLAGS from os.environ to conf.env
 	"""
-	conf.add_os_flags('LINKFLAGS')
-	conf.add_os_flags('LDFLAGS')
+	conf.add_os_flags('LINKFLAGS', dup=False)
+	conf.add_os_flags('LDFLAGS', dup=False)
 
 @conf
 def cc_load_tools(conf):
@@ -999,7 +1001,7 @@ def get_cc_version(conf, cc, gcc=False, icc=False, clang=False):
 	if clang and out.find('__clang__') < 0:
 		conf.fatal('Not clang/clang++')
 	if not clang and out.find('__clang__') >= 0:
-		conf.fatal('Could not find g++, if renamed try eg: CXX=g++48 waf configure')
+		conf.fatal('Could not find gcc/g++ (only Clang), if renamed try eg: CC=gcc48 CXX=g++48 waf configure')
 
 	k = {}
 	if icc or gcc or clang:
@@ -1165,6 +1167,7 @@ def multicheck(self, *k, **kw):
 			self.keep = False
 			self.returned_tasks = []
 			self.task_sigs = {}
+			self.progress_bar = 0
 		def total(self):
 			return len(tasks)
 		def to_log(self, *k, **kw):
@@ -1195,10 +1198,17 @@ def multicheck(self, *k, **kw):
 	for x in tasks:
 		x.logger.memhandler.flush()
 
+	if p.error:
+		for x in p.error:
+			if getattr(x, 'err_msg', None):
+				self.to_log(x.err_msg)
+				self.end_msg('fail', color='RED')
+				raise Errors.WafError('There is an error in the library, read config.log for more information')
+
 	for x in tasks:
 		if x.hasrun != Task.SUCCESS:
 			self.end_msg(kw.get('errmsg', 'no'), color='YELLOW', **kw)
-			self.fatal(kw.get('fatalmsg', None) or 'One of the tests has failed, see the config.log for more information')
+			self.fatal(kw.get('fatalmsg', None) or 'One of the tests has failed, read config.log for more information')
 
 	self.end_msg('ok', **kw)
 

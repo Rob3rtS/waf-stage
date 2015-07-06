@@ -11,13 +11,13 @@ from waflib import Utils, Errors, Logs
 import waflib.Node
 
 # the following 3 constants are updated on each new release (do not touch)
-HEXVERSION=0x1080900
+HEXVERSION=0x1080c00
 """Constant updated on new releases"""
 
-WAFVERSION="1.8.9"
+WAFVERSION="1.8.12"
 """Constant updated on new releases"""
 
-WAFREVISION="06e49b2a82166aeb14dde8357c58387f252fc722"
+WAFREVISION="ae508f2f82fbfad4420f7920b6f68a6801e383fd"
 """Git revision when the waf version is updated"""
 
 ABI = 98
@@ -325,7 +325,7 @@ class Context(ctx):
 		"""
 		subprocess = Utils.subprocess
 		kw['shell'] = isinstance(cmd, str)
-		Logs.debug('runner: %r' % cmd)
+		Logs.debug('runner: %r' % (cmd,))
 		Logs.debug('runner_env: kw=%s' % kw)
 
 		if self.logger:
@@ -386,7 +386,7 @@ class Context(ctx):
 		"""
 		subprocess = Utils.subprocess
 		kw['shell'] = isinstance(cmd, str)
-		Logs.debug('runner: %r' % cmd)
+		Logs.debug('runner: %r' % (cmd,))
 
 		if 'quiet' in kw:
 			quiet = kw['quiet']
