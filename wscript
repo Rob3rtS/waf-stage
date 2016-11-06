@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 # encoding: utf-8
-# Thomas Nagy, 2005-2015
+# Thomas Nagy, 2005-2016
 
 """
 to make a custom waf file use the option --tools
@@ -9,8 +9,7 @@ To add a tool that does not exist in the folder compat15, pass an absolute path:
 ./waf-light  --tools=compat15,/comp/waf/aba.py --prelude=$'\tfrom waflib.extras import aba\n\taba.foo()'
 """
 
-
-VERSION="1.8.12"
+VERSION="1.9.5"
 APPNAME='waf'
 REVISION=''
 
@@ -21,19 +20,14 @@ zip_types = ['bz2', 'gz', 'xz']
 
 PRELUDE = ''
 
-#from tokenize import *
-import tokenize
-
-import os, sys, re, io, optparse
-
-from waflib import Utils, Options, Logs
+import os, sys, re, io, optparse, tokenize
 from hashlib import md5
 
+from waflib import Utils, Options, Logs, Scripting
 from waflib import Configure
 Configure.autoconfig = 1
 
 def sub_file(fname, lst):
-
 	f = open(fname, 'rU')
 	try:
 		txt = f.read()
@@ -55,7 +49,7 @@ def to_bytes(x):
 		return x.encode()
 	return x
 
-print("------> Executing code from the top-level wscript <-----")
+Logs.warn('------> Executing code from the top-level wscript <-----')
 def init(ctx):
 	if Options.options.setver: # maintainer only (ita)
 		ver = Options.options.setver
@@ -90,7 +84,10 @@ def options(opt):
 
 	opt.add_option('--sign', action='store_true', default=False, help='make a signed file', dest='signed')
 
-	opt.add_option('--zip-type', action='store', default='bz2',
+	default_zip = 'bz2'
+	if os.name == 'java':
+		default_zip = 'gz'
+	opt.add_option('--zip-type', action='store', default=default_zip,
 		help='specify the zip type [Allowed values: %s]' % ' '.join(zip_types), dest='zip')
 
 	opt.add_option('--make-batch', action='store_true', default=False,
@@ -115,6 +112,7 @@ def options(opt):
 	opt.add_option('--coretools', action='store', help='Comma-separated core tools to add, eg: "vala,tex" [Default: all of them]',
 		dest='coretools', default='default')
 	opt.add_option('--prelude', action='store', help='Code to execute before calling waf', dest='prelude', default=PRELUDE)
+	opt.add_option('--namesfrom', action='store', help='Obtain the file names from a model archive', dest='namesfrom', default=None)
 	opt.load('python')
 
 def process_tokens(tokens):
@@ -159,7 +157,7 @@ def process_tokens(tokens):
 		if token != '\n':
 			prev = type
 
-	body = "".join(accu)
+	body = ''.join(accu)
 	return body
 
 deco_re = re.compile('(def|class)\\s+(\w+)\\(.*')
@@ -176,19 +174,18 @@ def process_decorators(body):
 			if not name:
 				raise IOError("decorator not followed by a function!" + line)
 			for x in buf:
-				all_deco.append("%s(%s)" % (x, name))
+				all_deco.append('%s(%s)' % (x, name))
 			accu.append(line)
 			buf = []
 		else:
 			accu.append(line)
-	return "\n".join(accu+all_deco)
+	return '\n'.join(accu+all_deco)
 
 def sfilter(path):
-
 	if path.endswith('.py') :
 		if Options.options.strip_comments:
 			if sys.version_info[0] >= 3:
-				f = open(path, "rb")
+				f = open(path, 'rb')
 				try:
 					tk = tokenize.tokenize(f.readline)
 					next(tk) # the first one is always tokenize.ENCODING for Python 3, ignore it
@@ -196,26 +193,26 @@ def sfilter(path):
 				finally:
 					f.close()
 			else:
-				f = open(path, "r")
+				f = open(path, 'r')
 				try:
 					cnt = process_tokens(tokenize.generate_tokens(f.readline))
 				finally:
 					f.close()
 		else:
-			f = open(path, "r")
+			f = open(path, 'r')
 			try:
 				cnt = f.read()
 			finally:
 				f.close()
-		# WARNING: since we now require python 2.4, we do not process the decorators anymore
-		# if you need such a thing, uncomment the code below:
+		# WARNING: since python >= 2.5 is required, decorators are not processed anymore
+		# uncomment the following to enable decorator replacement:
 		#cnt = process_decorators(cnt)
 		#if cnt.find('set(') > -1:
 		#	cnt = 'import sys\nif sys.hexversion < 0x020400f0: from sets import Set as set\n' + cnt
 		cnt = '#! /usr/bin/env python\n# encoding: utf-8\n# WARNING! Do not edit! https://waf.io/book/index.html#_obtaining_the_waf_file\n\n' + cnt
 
 	else:
-		f = open(path, "r")
+		f = open(path, 'r')
 		try:
 			cnt = f.read()
 		finally:
@@ -227,19 +224,41 @@ def sfilter(path):
 
 def create_waf(self, *k, **kw):
 	mw = 'tmp-waf-'+VERSION
-	print("-> preparing %r" % mw)
+	print('-> preparing %r' % mw)
 
-	import tarfile, re, zipfile
+	import tarfile, zipfile
 
 	zipType = Options.options.zip.strip().lower()
 	if zipType not in zip_types:
 		zipType = zip_types[0]
 
-
+	directory_files = {}
 	files = []
 	add3rdparty = []
 	for x in Options.options.add3rdparty.split(','):
-		if os.path.isabs(x):
+		if os.path.isdir(x):
+			# Create mapping from files absolute path to path in module
+			# directory (for module mylib):
+			#
+			#     {"/home/path/mylib/__init__.py": "mylib/__init__.py",
+			#      "/home/path/mylib/lib.py": "mylib/lib.py",
+			#      "/home/path/mylib/sub/sub.py": "mylib/sub/lib.py"
+			#     }
+			#
+			x_dir = self.generator.bld.root.find_dir(
+				os.path.abspath(os.path.expanduser(x)))
+
+			file_list = x_dir.ant_glob('**/*.py')
+
+			for f in file_list:
+
+				file_from = f.abspath()
+				file_to = os.path.join(x_dir.name, f.path_from(x_dir))
+
+				directory_files[file_from] = file_to
+				files.append(file_from)
+
+		elif os.path.isabs(x):
 			files.append(x)
 		else:
 			add3rdparty.append(x + '.py')
@@ -252,7 +271,7 @@ def create_waf(self, *k, **kw):
 		dd = os.path.join('waflib', d)
 		for k in os.listdir(dd):
 			if k == '__init__.py':
-				files.append(os.path.join(dd, k))
+				files.append(os.path.normpath(os.path.join(dd, k)))
 				continue
 			if d == 'Tools' and Options.options.coretools != 'default':
 				if not k in coretools:
@@ -261,26 +280,42 @@ def create_waf(self, *k, **kw):
 				if not k in add3rdparty:
 					continue
 			if k.endswith('.py'):
-				files.append(os.path.join(dd, k))
+				files.append(os.path.normpath(os.path.join(dd, k)))
+
+	if Options.options.namesfrom:
+		with tarfile.open(Options.options.namesfrom) as tar:
+			oldfiles = files
+			files = [x.name for x in tar.getmembers()]
+			if set(files) ^ set(oldfiles):
+				Logs.warn('The archive model has differences:')
+				Logs.warn('- Added %r', list(set(files) - set(oldfiles)))
+				Logs.warn('- Removed %r', list(set(oldfiles) - set(files)))
 
 	#open a file as tar.[extension] for writing
 	tar = tarfile.open('%s.tar.%s' % (mw, zipType), "w:%s" % zipType)
 	z = zipfile.ZipFile("zip/waflib.zip", "w", compression=zipfile.ZIP_DEFLATED)
 	for x in files:
-		tarinfo = tar.gettarinfo(x, x)
+		try:
+			tarinfo = tar.gettarinfo(x, x)
+		except NotImplementedError:
+			# jython 2.7.0 workaround
+			tarinfo = tarfile.TarInfo(x)
 		tarinfo.uid   = tarinfo.gid   = 0
 		tarinfo.uname = tarinfo.gname = 'root'
 		(code, size, cnt) = sfilter(x)
 		tarinfo.size = size
 
-		if os.path.isabs(x):
+		if x in directory_files:
+			tarinfo.name = 'waflib/extras/' + directory_files[x]
+		elif os.path.isabs(x):
 			tarinfo.name = 'waflib/extras/' + os.path.split(x)[1]
 
-		print("   adding %s as %s" % (x, tarinfo.name))
-
+		print('   adding %s as %s' % (x, tarinfo.name))
 		def dest(x):
-			if os.path.isabs(x):
-				return os.path.join("extras", os.path.basename(x))
+			if x in directory_files:
+				return os.path.join('waflib', 'extras', directory_files[x])
+			elif os.path.isabs(x):
+				return os.path.join('waflib', 'extras', os.path.basename(x))
 			else:
 				return os.path.normpath(os.path.relpath(x, "."))
 
@@ -302,7 +337,7 @@ def create_waf(self, *k, **kw):
 	# when possible, set the git revision in the waf file
 	bld = self.generator.bld
 	try:
-		rev = bld.cmd_and_log("git rev-parse HEAD", quiet=0).strip()
+		rev = bld.cmd_and_log('git rev-parse HEAD', quiet=0).strip()
 	except Exception:
 		rev = ''
 	else:
@@ -327,7 +362,7 @@ def create_waf(self, *k, **kw):
 	finally:
 		f.close()
 
-	# the REVISION value is the md5 sum of the binary blob (facilitate audits)
+	# the REVISION value is the md5 sum of the compressed data (facilitate audits)
 	m = md5()
 	m.update(cnt)
 	REVISION = m.hexdigest()
@@ -343,7 +378,7 @@ def create_waf(self, *k, **kw):
 				s = chr(i) + chr(j)
 				if -1 == kd.find(s.encode()):
 					return (kd.replace(ch.encode(), s.encode()), s)
-		raise
+		raise ValueError('Could not find a proper encoding')
 
 	# The reverse order prevents collisions
 	(cnt, C3) = find_unused(cnt, '\x00')
@@ -373,6 +408,7 @@ def create_waf(self, *k, **kw):
 			f.write('#')
 			f.write(sig)
 			f.write('\n')
+			os.remove('waf.asc')
 	finally:
 		f.close()
 
@@ -388,19 +424,13 @@ def create_waf(self, *k, **kw):
 		os.chmod('waf', Utils.O755)
 	os.remove('%s.tar.%s' % (mw, zipType))
 
-def make_copy(inf, outf):
-	(a, b, cnt) = sfilter(inf)
-	f = open(outf, "wb")
-	try:
-		f.write(cnt)
-	finally:
-		f.close()
-
 def configure(conf):
 	conf.load('python')
-	conf.check_python_version((2,4))
 
 def build(bld):
-	waf = bld.path.make_node('waf') # create the node right here
-	bld(name='create_waf', rule=create_waf, target=waf, always=True, color='PINK', update_outputs=True)
+	waf = bld.path.make_node('waf') # do not use a build directory for this file
+	bld(name='create_waf', rule=create_waf, target=waf, always=True, color='PINK')
 
+class Dist(Scripting.Dist):
+	def get_excl(self):
+		return super(self.__class__, self).get_excl() + ' **/waflib.zip'

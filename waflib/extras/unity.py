@@ -22,8 +22,12 @@ def options(opt):
 class unity(Task.Task):
 	color = 'BLUE'
 	scan = c_preproc.scan
+	def to_include(self, node):
+		ret = node.path_from(self.outputs[0].parent)
+		ret = ret.replace('\\', '\\\\').replace('"', '\\"')
+		return ret
 	def run(self):
-		lst = ['#include "%s"\n' % node.abspath() for node in self.inputs]
+		lst = ['#include "%s"\n' % self.to_include(node) for node in self.inputs]
 		txt = ''.join(lst)
 		self.outputs[0].write(txt)
 
@@ -52,9 +56,9 @@ def make_batch_fun(ext):
 
 def enable_support(cc, cxx):
 	if cxx or not cc:
-		make_cxx_batch = TaskGen.extension('.cpp', '.cc', '.cxx', '.C', '.c++')(make_batch_fun('cxx'))
+		TaskGen.extension('.cpp', '.cc', '.cxx', '.C', '.c++')(make_batch_fun('cxx'))
 	if cc:
-		make_c_batch = TaskGen.extension('.c')(make_batch_fun('c'))
+		TaskGen.extension('.c')(make_batch_fun('c'))
 	else:
 		TaskGen.task_gen.mappings['.c'] = TaskGen.task_gen.mappings['.cpp']
 

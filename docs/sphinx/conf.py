@@ -19,6 +19,8 @@ import sys, os, re
 sys.path.insert(0, os.path.abspath(os.path.join('..', "..")))
 sys.path.append(os.path.abspath('.'))
 
+graphviz_output_format = 'svg'
+
 # monkey patch a few waf classes for documentation purposes!
 #-----------------------------------------------------------
 
@@ -134,7 +136,7 @@ from waflib.Task import Task
 Task.__dict__['post_run'].__doc__ = "Update the cache files (executed by threads). Override in subclasses."
 
 
-from waflib import Configure, Build
+from waflib import Configure, Build, Errors
 confmeths = []
 def conf(f):
 	def fun(*k, **kw):
@@ -199,7 +201,7 @@ for x in lst:
 	for func_name in funcs:
 		thefunc = getattr(TaskGen.task_gen, func_name, None)
 		if getattr(thefunc, "__name__", None) is None: continue
-		for feat in TaskGen.feats.keys():
+		for feat in TaskGen.feats:
 			funcs = list(TaskGen.feats[feat])
 			if func_name in funcs:
 				if x not in tool_to_features:
@@ -229,36 +231,42 @@ for z in lst:
 	links = []
 
 	allmeths = set(TaskGen.feats[z])
-	for x in meths:
-		for y in TaskGen.task_gen.prec.get(x, []):
-			links.append((x, y))
-			allmeths.add(x)
-			allmeths.add(y)
+	for x, lst in TaskGen.task_gen.prec.items():
+		if x in meths:
+			for y in lst:
+				links.append((x, y))
+				allmeths.add(y)
+		else:
+			for y in lst:
+				if y in meths:
+					links.append((x, y))
+					allmeths.add(x)
 
 	color = ',fillcolor="#fffea6",style=filled'
 	ms = []
 	for x in allmeths:
 		try:
 			m = TaskGen.task_gen.__dict__[x]
-		except:
+		except KeyError:
 			raise ValueError("undefined method %r" % x)
 
 		k = "%s.html#%s.%s" % (m.__module__.split('.')[-1], m.__module__, m.__name__)
 		if str(m.__module__).find('.Tools') > 0:
 			k = 'tools/' + k
+		k = '../' + k
 
-		ms.append('\t"%s" [style="setlinewidth(0.5)",URL="%s",fontname="Vera Sans, DejaVu Sans, Liberation Sans, Arial, Helvetica, sans",height=0.25,shape=box,fontsize=10%s];' % (x, k, x in TaskGen.feats[z] and color or ''))
+		ms.append('\t\t"%s" [style="setlinewidth(0.5)",URL="%s",target="_top",fontname="Vera Sans, DejaVu Sans, Liberation Sans, Arial, Helvetica, sans",height=0.25,shape="rectangle",fontsize=10%s];' % (x, k, x in TaskGen.feats[z] and color or ''))
 
 	for x, y in links:
-		ms.append('\t"%s" -> "%s" [arrowsize=0.5,style="setlinewidth(0.5)"];' % (x, y))
+		ms.append('\t\t"%s" -> "%s" [arrowsize=0.5,style="setlinewidth(0.5)"];' % (x, y))
 
-	rs = '\tdigraph feature_%s {\n\tsize="8.0, 12.0";\n\t%s\n\t}\n' % (z == '*' and 'all' or z, '\n'.join(ms))
+	rs = '\tdigraph feature_%s {\n\t\tsize="8.0, 12.0";\n%s\n\t}\n' % (z == '*' and 'all' or z, '\n'.join(ms))
 	title = "Feature %s" % (z == '*' and '\\*' or z)
 	title += "\n" + len(title) * '='
 
 	accu.append("%s\n\n.. graphviz::\n\n%s\n\n" % (title, rs))
 
-f = open('tmpmap', 'w')
+f = open('featuremap.rst', 'w')
 f.write(""".. _featuremap:
 
 Feature reference
@@ -303,7 +311,7 @@ for x in confmeths:
 	accu.append('.. _%s: %s#waflib.%s.%s\n' % (x, d, modname, x))
 	accu.append('* %s_\n' % x)
 
-f = open('tmpconf', 'w')
+f = open('confmap.rst', 'w')
 f.write(""".. _confmap:
 
 Configuration methods
@@ -341,7 +349,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Waf'
-copyright = u'2005-2015, Thomas Nagy'
+copyright = u'2005-2016, Thomas Nagy'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -396,7 +404,14 @@ pygments_style = 'sphinx'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'default'
+try:
+	from sphinx import version_info
+except ImportError:
+	version_info = None
+if version_info and (1, 3) <= version_info:
+	html_theme = 'classic'
+else:
+	html_theme = 'default'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -475,7 +490,7 @@ htmlhelp_basename = 'wafdoc'
 # -- Options for LaTeX output --------------------------------------------------
 
 # The paper size ('letter' or 'a4').
-#latex_paper_size = 'letter'
+latex_paper_size = 'a4'
 
 # The font size ('10pt', '11pt' or '12pt').
 #latex_font_size = '10pt'
@@ -528,12 +543,10 @@ def maybe_skip_member(app, what, name, obj, skip, options):
 
 	# from http://sphinx.pocoo.org/ext/autodoc.html#event-autodoc-skip-member
 	# param name: the fully qualified name of the object <- it is not, the name does not contain the module path
-	if name == 'Nod3':
+	if name in ('__doc__', '__module__', 'Nod3', '__weakref__'):
 		return True
 	global exclude_taskgen
 	if what == 'class' and name in exclude_taskgen:
-		return True
-	if name == '__weakref__':
 		return True
 	if obj.__doc__:
 		return False

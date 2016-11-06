@@ -26,9 +26,8 @@ When using this tool, the wscript will look like:
 			bld(features="doxygen", doxyfile='Doxyfile', ...)
 """
 
-from fnmatch import fnmatchcase
-import os, os.path, re, stat
-from waflib import Task, Utils, Node, Logs, Errors
+import os, os.path, re
+from waflib import Task, Utils, Node
 from waflib.TaskGen import feature
 
 DOXY_STR = '"${DOXYGEN}" - '
@@ -90,7 +89,7 @@ class doxygen(Task.Task):
 
 			# Override with any parameters passed to the task generator
 			if getattr(self.generator, 'pars', None):
-				for k, v in self.generator.pars.iteritems():
+				for k, v in self.generator.pars.items():
 					self.pars[k] = v
 
 			self.doxy_inputs = getattr(self, 'doxy_inputs', [])
@@ -112,13 +111,18 @@ class doxygen(Task.Task):
 			self.output_dir = bld.root.find_dir(self.pars['OUTPUT_DIRECTORY'])
 
 		self.signature()
-		return Task.Task.runnable_status(self)
+		ret = Task.Task.runnable_status(self)
+		if ret == Task.SKIP_ME:
+			# in case the files were removed
+			self.add_install()
+		return ret
 
 	def scan(self):
 		exclude_patterns = self.pars.get('EXCLUDE_PATTERNS','').split()
+		exclude_patterns = [pattern.replace('*/', '**/') for pattern in exclude_patterns]
 		file_patterns = self.pars.get('FILE_PATTERNS','').split()
 		if not file_patterns:
-			file_patterns = DOXY_FILE_PATTERNS
+			file_patterns = DOXY_FILE_PATTERNS.split()
 		if self.pars.get('RECURSIVE') == 'YES':
 			file_patterns = ["**/%s" % pattern for pattern in file_patterns]
 		nodes = []
@@ -145,16 +149,20 @@ class doxygen(Task.Task):
 	def post_run(self):
 		nodes = self.output_dir.ant_glob('**/*', quiet=True)
 		for x in nodes:
-			x.sig = Utils.h_file(x.abspath())
+			self.generator.bld.node_sigs[x] = self.uid()
+		self.add_install()
+		return Task.Task.post_run(self)
+
+	def add_install(self):
+		nodes = self.output_dir.ant_glob('**/*', quiet=True)
 		self.outputs += nodes
 		if getattr(self.generator, 'install_path', None):
 			if not getattr(self.generator, 'doxy_tar', None):
-				self.generator.bld.install_files(self.generator.install_path,
-					self.outputs,
+				self.generator.add_install_files(install_to=self.generator.install_path,
+					install_from=self.outputs,
 					postpone=False,
 					cwd=self.output_dir,
 					relative_trick=True)
-		return Task.Task.post_run(self)
 
 class tar(Task.Task):
 	"quick tar creation"
@@ -204,7 +212,7 @@ def process_doxy(self):
 		else:
 			tsk.env['TAROPTS'] = ['cf']
 		if getattr(self, 'install_path', None):
-			self.bld.install_files(self.install_path, tsk.outputs)
+			self.add_install_files(install_to=self.install_path, install_from=tsk.outputs)
 
 def configure(conf):
 	'''

@@ -39,7 +39,7 @@ def build(bld):
 
 	# embedding
 	#
-	# use swig_flags = '-c++ -python -dump_classes' for debugging
+	# use swig_flags = '-c++ -python -debug-classes' for debugging
 
 	obj = bld(
 		features = 'cxx cxxprogram pyembed',
@@ -81,7 +81,7 @@ def build(bld):
 	bld.add_group()
 	python_site_package = '${PREFIX}/lib/python%s/site-packages' % bld.env.PYTHON_VERSION
 	generated_py = bld.path.find_or_declare('extend/python/test_swig_waf.py')
-	bld(feature='py', source=generated_py, install_path=python_site_package, install_from=bld.path.get_bld())
+	bld(features='py', source=generated_py, install_path=python_site_package, install_from=bld.path.get_bld())
 
 
 	bld.add_post_fun(exec_test_python)
@@ -129,7 +129,6 @@ def build(bld):
 			if x.endswith('.java'):
 				# create a node in the directory we want to
 				j = node.make_node(x) # create a node
-				j.sig = Utils.h_file(j.abspath()) # update the node signature
 	# depend on the .i file to make sure the .java files are copied after swig is executed
 	bld(name='move_and_read', rule=move_java_files, source='extend/java/test_swig_waf.i', after=['swig'], before=['javac'])
 	#"""

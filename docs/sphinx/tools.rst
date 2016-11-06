@@ -124,9 +124,7 @@ The next tools provide support for code generators used in C and C++ projects.
 	tools/dbus
 	tools/vala
 	tools/glib2
-	tools/qt4
 	tools/qt5
-	tools/kde4
 	tools/perl
 	tools/python
 	tools/ruby
@@ -147,4 +145,6 @@ The following tools provide support for specific compilers or configurations. Mo
 	tools/gnu_dirs
 	tools/intltool
 	tools/lua
+	tools/md5_tstamp
+	tools/nobuild
 
